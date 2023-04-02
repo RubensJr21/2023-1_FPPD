@@ -17,7 +17,9 @@ fechamento de thread => https://stackoverflow.com/questions/11624545/how-to-make
 */
 
 #define QTD_CANIBAIS 64
-#define QTD_COMIDAS 30000000
+#define MIL 1000
+#define MILHOES 1000000
+#define QTD_COMIDAS 3 * MILHOES
 
 typedef struct
 {
