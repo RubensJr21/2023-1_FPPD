@@ -230,7 +230,5 @@ int main(int argc, char** argv)
 	pthread_mutex_destroy(&mutex_insumos);
 	pthread_mutex_destroy(&mutex_caldeirao_comidas);
 
-	//pthread_exit(0);
-
 	return 0;
 }
