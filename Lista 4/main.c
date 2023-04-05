@@ -21,10 +21,10 @@ explicação do sem_trywait() => https://pubs.opengroup.org/onlinepubs/000095399/f
 fechamento de thread => https://stackoverflow.com/questions/11624545/how-to-make-main-thread-wait-for-all-child-threads-finish
 */
 
-#define QTD_CANIBAIS 24
+#define QTD_CANIBAIS 10
 
 #define MAX_TENTATIVAS_CACAR 3
-#define QTD_COMIDAS 10
+#define QTD_COMIDAS 4
 
 typedef struct
 {
@@ -66,8 +66,7 @@ void* fcozinheiro(void* arg)
 {
 	pkg_cozinheiro_t* pkg = (pkg_cozinheiro_t*)arg;
 	int ja_produzidos = 0;
-	
-	// 
+
 	// Produz 1 por 1, até M comidas, depois que chegar a M comidas libera para comer e dorme;
 	
 	while (1)
@@ -80,26 +79,29 @@ void* fcozinheiro(void* arg)
 		
 		if (*(pkg->insumos) < pkg->qtd_min_insumos_para_cozinhar)
 		{
-			printf( ANSI_COLOR_RED "continue\n" ANSI_COLOR_RESET);
+			printf(ANSI_COLOR_RED "Insumos %d \n" ANSI_COLOR_RESET, *(pkg->insumos));
 			pthread_mutex_unlock(pkg->mutex_insumos);
-			continue;
 		}
-
-		pthread_mutex_unlock(pkg->mutex_insumos);
-
-		// Canibais podem comer enquanto o cozinehro cozinha
-		// O último a comer avisa que o caldeirão vai zerar
-		while (*(pkg->caldeirao_comidas) < pkg->max_caldeirao)
+		else
 		{
-			pthread_mutex_lock(pkg->mutex_insumos);
-			pkg->insumos--;
 			pthread_mutex_unlock(pkg->mutex_insumos);
-			pthread_mutex_lock(pkg->mutex_caldeirao_comidas);
-			pkg->caldeirao_comidas++;
-			pthread_mutex_unlock(pkg->mutex_caldeirao_comidas);
-			sem_post(pkg->pode_comer);
-			pkg->comidas_produzidas++;
+
+			// Canibais podem comer enquanto o cozinehro cozinha
+			// O último a comer avisa que o caldeirão vai zerar
+			while (*(pkg->caldeirao_comidas) < pkg->max_caldeirao)
+			{
+				pthread_mutex_lock(pkg->mutex_insumos);
+				pkg->insumos--;
+				pthread_mutex_unlock(pkg->mutex_insumos);
+				pthread_mutex_lock(pkg->mutex_caldeirao_comidas);
+				(*(pkg->caldeirao_comidas))++;
+				pthread_mutex_unlock(pkg->mutex_caldeirao_comidas);
+				sem_post(pkg->pode_comer);
+				pkg->comidas_produzidas++;
+				printf(ANSI_COLOR_RED "O Cozinheiro aumentou a comidas_produzidas para %d \n" ANSI_COLOR_RESET, *(pkg->caldeirao_comidas));
+			}
 		}
+
 	}
 	return NULL;
 }
@@ -149,6 +151,7 @@ void* fcanibal(void* arg)
 	// 0.1.1.1 Se conseguir ele tenta comer de novo, e o processo repete
 
 	int tentativas;
+	long execucoes = 0;
 
 	while (1)
 	{
@@ -160,10 +163,11 @@ void* fcanibal(void* arg)
 			int pode_comer = sem_trywait(pkg->pode_comer);
 			if (pode_comer)
 			{
+				printf(ANSI_COLOR_RED "Canibal #%d comeu %d \n" ANSI_COLOR_RESET, pkg->id, execucoes++);
 				pthread_mutex_lock(pkg->mutex_caldeirao_comidas);
-				//(*(pkg->caldeirao_comidas))--;
+				(*(pkg->caldeirao_comidas))--;
 				// Se após o canibal comer do caldeirao e perceber que foi o último, ele irá avisar o cozinheiro
-				if ((*(pkg->caldeirao_comidas))-- == 1)
+				if (*(pkg->caldeirao_comidas) == 1)
 				{
 					pthread_mutex_unlock(pkg->mutex_caldeirao_comidas);
 					pthread_cond_signal(pkg->cond);
@@ -177,7 +181,9 @@ void* fcanibal(void* arg)
 			{
 				pthread_mutex_lock(pkg->mutex_insumos);
 				(*(pkg->insumos))++;
+				printf(ANSI_COLOR_RED "A Canibal #%d mudou o insumo de %d para %d \n" ANSI_COLOR_RESET, pkg->id, *(pkg->insumos)-1, *(pkg->insumos));
 				pthread_mutex_unlock(pkg->mutex_insumos);
+				pthread_cond_signal(pkg->cond);
 			}
 		}
 		// espera até conseguir comer
@@ -186,7 +192,6 @@ void* fcanibal(void* arg)
 		(*(pkg->caldeirao_comidas))--;
 		pthread_mutex_unlock(pkg->mutex_caldeirao_comidas);
 		pkg->comidas_consumidas++;
-		tentativas = 0;
 	}
 	return NULL;
 }
