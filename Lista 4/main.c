@@ -11,31 +11,40 @@
 #include <stdlib.h>
 #include <Windows.h>
 
+#define ANSI_COLOR_RED     	 "\x1b[31m" //cores em ANSI utilizadas 
+#define ANSI_COLOR_GRAY    	 "\e[0;37m"
+#define ANSI_COLOR_DARK_GRAY "\e[1;30m"
+#define ANSI_COLOR_GREEN	 "\e[0;32m"
+#define ANSI_COLOR_RESET     "\x1b[0m"
 /*
 explicação do sem_trywait() => https://pubs.opengroup.org/onlinepubs/000095399/functions/sem_trywait.html
 fechamento de thread => https://stackoverflow.com/questions/11624545/how-to-make-main-thread-wait-for-all-child-threads-finish
 */
 
-#define QTD_CANIBAIS 64
+#define QTD_CANIBAIS 24
 
 #define MAX_TENTATIVAS_CACAR 3
-#define QTD_COMIDAS 10;
+#define QTD_COMIDAS 10
 
 typedef struct
 {
 	int* insumos;
 	int* caldeirao_comidas;
 	int comidas_produzidas;
-	int qtd_comidas_para_produzir;
+	int qtd_min_insumos_para_cozinhar;
+	int max_caldeirao;
+
 	sem_t* pode_comer;
 	sem_t* pode_cozinhar;
+
 	pthread_cond_t* cond;
+
 	pthread_mutex_t* mutex_insumos;
 	pthread_mutex_t* mutex_caldeirao_comidas;
 } pkg_cozinheiro_t;
 
 void pkg_cozinheiro_init(
-	pkg_cozinheiro_t* pkg, int* insumos, int* caldeirao_comidas, int qtd_comidas_para_produzir,
+	pkg_cozinheiro_t* pkg, int* insumos, int* caldeirao_comidas, int qtd_min_insumos_para_cozinhar, int max_caldeirao,
 	sem_t* pode_comer, sem_t* pode_cozinhar,
 	pthread_cond_t* cond,
 	pthread_mutex_t* mutex_insumos, pthread_mutex_t* mutex_caldeirao_comidas
@@ -44,7 +53,8 @@ void pkg_cozinheiro_init(
 	pkg->insumos = insumos;
 	pkg->caldeirao_comidas = caldeirao_comidas;
 	pkg->comidas_produzidas = 0;
-	pkg->qtd_comidas_para_produzir = qtd_comidas_para_produzir;
+	pkg->qtd_min_insumos_para_cozinhar = qtd_min_insumos_para_cozinhar;
+	pkg->max_caldeirao = max_caldeirao;
 	pkg->pode_comer = pode_comer;
 	pkg->pode_cozinhar = pode_cozinhar;
 	pkg->cond = cond;
@@ -65,20 +75,31 @@ void* fcozinheiro(void* arg)
 		// verificar se os insumos são suficientes para cozinhar
 		pthread_mutex_lock(pkg->mutex_insumos);
 
-		// Só posso usar o cond wait fazendo o mutex antes
+		// Só posso usar o cond wait fazendo o lock no mutex antes
 		pthread_cond_wait(pkg->cond, pkg->mutex_insumos);
 		
+		if (*(pkg->insumos) < pkg->qtd_min_insumos_para_cozinhar)
+		{
+			printf( ANSI_COLOR_RED "continue\n" ANSI_COLOR_RESET);
+			pthread_mutex_unlock(pkg->mutex_insumos);
+			continue;
+		}
+
+		pthread_mutex_unlock(pkg->mutex_insumos);
+
 		// Canibais podem comer enquanto o cozinehro cozinha
 		// O último a comer avisa que o caldeirão vai zerar
-
-		pkg->insumos--;
-		pthread_mutex_unlock(pkg->mutex_insumos);
-		pthread_mutex_lock(pkg->mutex_caldeirao_comidas);
-		pkg->caldeirao_comidas++;
-		pthread_mutex_unlock(pkg->mutex_caldeirao_comidas);
-		sem_post(pkg->pode_comer);
-		ja_produzidos++;
-		pkg->comidas_produzidas++;
+		while (*(pkg->caldeirao_comidas) < pkg->max_caldeirao)
+		{
+			pthread_mutex_lock(pkg->mutex_insumos);
+			pkg->insumos--;
+			pthread_mutex_unlock(pkg->mutex_insumos);
+			pthread_mutex_lock(pkg->mutex_caldeirao_comidas);
+			pkg->caldeirao_comidas++;
+			pthread_mutex_unlock(pkg->mutex_caldeirao_comidas);
+			sem_post(pkg->pode_comer);
+			pkg->comidas_produzidas++;
+		}
 	}
 	return NULL;
 }
@@ -89,9 +110,12 @@ typedef struct
 	int* insumos;
 	int* caldeirao_comidas;
 	int comidas_consumidas;
+
 	sem_t* pode_comer;
 	sem_t* pode_cozinhar;
+
 	pthread_cond_t* cond;
+
 	pthread_mutex_t* mutex_insumos;
 	pthread_mutex_t* mutex_caldeirao_comidas;
 } pkg_canibal_t;
@@ -137,18 +161,22 @@ void* fcanibal(void* arg)
 			if (pode_comer)
 			{
 				pthread_mutex_lock(pkg->mutex_caldeirao_comidas);
-				(*(pkg->caldeirao_comidas))--;
-				pthread_mutex_unlock(pkg->mutex_caldeirao_comidas);
+				//(*(pkg->caldeirao_comidas))--;
+				// Se após o canibal comer do caldeirao e perceber que foi o último, ele irá avisar o cozinheiro
+				if ((*(pkg->caldeirao_comidas))-- == 1)
+				{
+					pthread_mutex_unlock(pkg->mutex_caldeirao_comidas);
+					pthread_cond_signal(pkg->cond);
+				} else
+				{
+					pthread_mutex_unlock(pkg->mutex_caldeirao_comidas);
+				}
 				pkg->comidas_consumidas++;
 			}
 			else
 			{
 				pthread_mutex_lock(pkg->mutex_insumos);
 				(*(pkg->insumos))++;
-				if (*(pkg->insumos) >= )
-				{
-
-				}
 				pthread_mutex_unlock(pkg->mutex_insumos);
 			}
 		}
@@ -158,6 +186,7 @@ void* fcanibal(void* arg)
 		(*(pkg->caldeirao_comidas))--;
 		pthread_mutex_unlock(pkg->mutex_caldeirao_comidas);
 		pkg->comidas_consumidas++;
+		tentativas = 0;
 	}
 	return NULL;
 }
@@ -194,7 +223,7 @@ imprimir quanto
 
 int main(int argc, char** argv)
 {
-	int insumos = 0, caldeirao_comidas = 0, insumos_min = QTD_COMIDAS;
+	int insumos = 0, caldeirao_comidas = 0, insumos_min = QTD_COMIDAS , max_caldeirao = QTD_COMIDAS;
 	sem_t pode_comer, pode_cozinhar;
 	sem_init(&pode_comer, 0, 0);
 	sem_init(&pode_cozinhar, 0, 0);
@@ -211,7 +240,7 @@ int main(int argc, char** argv)
 
 	pkg_cozinheiro_t pkg_co;
 
-	pkg_cozinheiro_init(&pkg_co, &insumos, &caldeirao_comidas, QTD_COMIDAS, &pode_comer, &pode_cozinhar, &cond_COZINHAR, &mutex_insumos, &mutex_caldeirao_comidas);
+	pkg_cozinheiro_init(&pkg_co, &insumos, &caldeirao_comidas, insumos_min, max_caldeirao, &pode_comer, &pode_cozinhar, &cond_COZINHAR, &mutex_insumos, &mutex_caldeirao_comidas);
 
 	pthread_create(&cozinheiro, NULL, &fcozinheiro, (void*)&pkg_co);
 
