@@ -33,6 +33,7 @@ typedef struct
 	int comidas_produzidas;
 	int qtd_min_insumos_para_cozinhar;
 	int max_caldeirao;
+	int vezes_que_dormiu;
 
 	sem_t* pode_comer;
 	sem_t* pode_cozinhar;
@@ -55,6 +56,7 @@ void pkg_cozinheiro_init(
 	pkg->comidas_produzidas = 0;
 	pkg->qtd_min_insumos_para_cozinhar = qtd_min_insumos_para_cozinhar;
 	pkg->max_caldeirao = max_caldeirao;
+	pkg->vezes_que_dormiu = 0;
 	pkg->pode_comer = pode_comer;
 	pkg->pode_cozinhar = pode_cozinhar;
 	pkg->cond = cond;
@@ -75,6 +77,7 @@ void* fcozinheiro(void* arg)
 		pthread_mutex_lock(pkg->mutex_insumos);
 
 		// Só posso usar o cond wait fazendo o lock no mutex antes
+		pkg->vezes_que_dormiu++;
 		pthread_cond_wait(pkg->cond, pkg->mutex_insumos);
 		
 		if (*(pkg->insumos) < pkg->qtd_min_insumos_para_cozinhar)
@@ -91,14 +94,14 @@ void* fcozinheiro(void* arg)
 			while (*(pkg->caldeirao_comidas) < pkg->max_caldeirao)
 			{
 				pthread_mutex_lock(pkg->mutex_insumos);
-				pkg->insumos--;
+				(*(pkg->insumos))--; // valor 56 => 55
 				pthread_mutex_unlock(pkg->mutex_insumos);
 				pthread_mutex_lock(pkg->mutex_caldeirao_comidas);
 				(*(pkg->caldeirao_comidas))++;
+				//printf(ANSI_COLOR_RED "O Cozinheiro aumentou a comidas_produzidas para %d \n" ANSI_COLOR_RESET, *(pkg->caldeirao_comidas));
 				pthread_mutex_unlock(pkg->mutex_caldeirao_comidas);
 				sem_post(pkg->pode_comer);
 				pkg->comidas_produzidas++;
-				printf(ANSI_COLOR_RED "O Cozinheiro aumentou a comidas_produzidas para %d \n" ANSI_COLOR_RESET, *(pkg->caldeirao_comidas));
 			}
 		}
 
@@ -112,6 +115,8 @@ typedef struct
 	int* insumos;
 	int* caldeirao_comidas;
 	int comidas_consumidas;
+	int vezes_que_dormiu;
+	int vezes_que_cacou;
 
 	sem_t* pode_comer;
 	sem_t* pode_cozinhar;
@@ -133,6 +138,8 @@ void pkg_canibal_init(
 	pkg->insumos = insumos;
 	pkg->caldeirao_comidas = caldeirao_comidas;
 	pkg->comidas_consumidas = 0;
+	pkg->vezes_que_dormiu = 0;
+	pkg->vezes_que_cacou = 0;
 	pkg->pode_comer = pode_comer;
 	pkg->pode_cozinhar = pode_cozinhar;
 	pkg->cond = cond;
@@ -151,7 +158,7 @@ void* fcanibal(void* arg)
 	// 0.1.1.1 Se conseguir ele tenta comer de novo, e o processo repete
 
 	int tentativas;
-	long execucoes = 0;
+	//long execucoes = 0;
 
 	while (1)
 	{
@@ -161,9 +168,10 @@ void* fcanibal(void* arg)
 			// tenta comer
 			// se não conseguir ele caça
 			int pode_comer = sem_trywait(pkg->pode_comer);
-			if (pode_comer)
+			if (pode_comer == 0)
 			{
-				printf(ANSI_COLOR_RED "Canibal #%d comeu %d \n" ANSI_COLOR_RESET, pkg->id, execucoes++);
+				printf("#%d - Conseguiu comer: %d\n", pkg->id, pode_comer);
+				//printf(ANSI_COLOR_RED "Canibal #%d comeu %d \n" ANSI_COLOR_RESET, pkg->id, execucoes++);
 				pthread_mutex_lock(pkg->mutex_caldeirao_comidas);
 				(*(pkg->caldeirao_comidas))--;
 				// Se após o canibal comer do caldeirao e perceber que foi o último, ele irá avisar o cozinheiro
@@ -181,13 +189,17 @@ void* fcanibal(void* arg)
 			{
 				pthread_mutex_lock(pkg->mutex_insumos);
 				(*(pkg->insumos))++;
-				printf(ANSI_COLOR_RED "A Canibal #%d mudou o insumo de %d para %d \n" ANSI_COLOR_RESET, pkg->id, *(pkg->insumos)-1, *(pkg->insumos));
+				//printf(ANSI_COLOR_RED "A Canibal #%d mudou o insumo de %d para %d \n" ANSI_COLOR_RESET, pkg->id, *(pkg->insumos) - 1, *(pkg->insumos));
 				pthread_mutex_unlock(pkg->mutex_insumos);
+				pkg->vezes_que_cacou++;
 				pthread_cond_signal(pkg->cond);
 			}
 		}
+
 		// espera até conseguir comer
+		pkg->vezes_que_dormiu++;
 		sem_wait(pkg->pode_comer);
+
 		pthread_mutex_lock(pkg->mutex_caldeirao_comidas);
 		(*(pkg->caldeirao_comidas))--;
 		pthread_mutex_unlock(pkg->mutex_caldeirao_comidas);
@@ -267,6 +279,8 @@ int main(int argc, char** argv)
 		pthread_cancel(canibais[i]);
 	}
 
+	pthread_cancel(cozinheiro);
+
 	for (int i = 0; i < QTD_CANIBAIS; i++)
 	{
 		printf("Vou cancelar a thread #%d\n", pkgs_ca[i].id);
@@ -274,14 +288,34 @@ int main(int argc, char** argv)
 		printf("Cancelei a thread #%d\n", pkgs_ca[i].id);
 	}
 
-	pthread_cancel(cozinheiro);
-
 	printf("Vou cancelar a thread do cozinheiro\n");
 	pthread_join(cozinheiro, NULL);
 	printf("Cancelei a thread do cozinheiro\n");
 
 	printf("\n *** CANCELAMENTO DE THREADS *** \n\n");
 
+
+	pkg_canibal_t p;
+	int consumo_canibal = 0;
+
+	printf("Canibal\tCOMEU\tDORMIU\tCACOU\n");
+	for (int i = 0; i < QTD_CANIBAIS; i++)
+	{
+		p = pkgs_ca[i];
+		printf("%d\t%d\t%d\t%d\n", p.id, p.comidas_consumidas, p.vezes_que_dormiu, p.vezes_que_cacou);
+		consumo_canibal += p.comidas_consumidas;
+	}
+	printf("----------------------------------\n");
+	printf("Total consumido pelos canibais: %d\n", consumo_canibal);
+
+	printf("\n");
+
+	printf("Chef\tCOZINHOU\tDORMIU\n");
+	printf("%d\t%d\t%d\n", 1, pkg_co.comidas_produzidas, pkg_co.vezes_que_dormiu);
+	printf("Estoque\t%d\n", insumos);
+	printf("Caldeirao\t%d\n", caldeirao_comidas);
+
+	/*
 	// quanto cada canibal comeu
 	for (int i = 0; i < QTD_CANIBAIS; i++)
 	{
@@ -290,8 +324,9 @@ int main(int argc, char** argv)
 
 	printf("O cozinheiro poroduziu %d comidas\n", pkg_co.comidas_produzidas);
 
-	printf("Restaram %d comidas no estoque\n", insumos);
+	printf("Restaram %d insumos no estoque\n", insumos);
 
+	*/
 
 	// Caso alguém esteja esperado com sem_wait com o sem_close eles são liberados
 	sem_close(&pode_comer);
