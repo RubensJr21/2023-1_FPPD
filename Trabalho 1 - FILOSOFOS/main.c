@@ -235,6 +235,10 @@ void* filosofo(void* arg)
 		}
 	}
 
+	return 0;
+
+	// a main irá cancelar todas as outras threads e esperará num join
+
 	// informa de algum jeito aos outros que ele chegou no limite
 	if (sem_trywait(pf->alguem_comeu_estipulado->sem) == CONSEGUIU)
 	{
