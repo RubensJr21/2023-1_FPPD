@@ -1,4 +1,3 @@
-
 // Código necessário para o Visual Studio não acusar funções inseguras
 #pragma once
 #define _CRT_SECURE_NO_WARNINGS 1
@@ -17,10 +16,9 @@
 #define FALSE 0
 #define CONSEGUIU 0
 
-#define LIVRE 0
-#define OCUPADO 1
+#define NAO_ESTA_COMENDO 0
+#define ESTA_COMENDO 1
 
-#define NAO_ESTA_NA_LISTA -1
 /*
 Problema: Filósofos
 N filósofos estão à mesa
@@ -78,79 +76,29 @@ typedef struct {
 
 filosofo_t* create_filoso(int id)
 {
-	filosofo_t* f = (filosofo_t*)malloc(sizeof(filosofo_t));
-	if (f!=NULL)
-	{
-		f->id = id;
-	}
+	filosofo_t* f = malloc(sizeof(filosofo_t));
+	f->id = id;
 	return f;
 }
 
-typedef struct filosofos_comendo_t {
-	filosofo_t** filosofos;
-	pthread_mutex_t* mutex;
-	int* qtd_max_filosofos_comendo; // definida pela formula: qtd_max_filosofos_comendo = N - floor(N/2)
-	int* posicoes_livres; // {0, 1, 0, 0, 1} => 0 = LIVRE e 1 = OCUPADO
-	int qtd_filosofos_inseridos;
-	int (*adicionar_filosofo) (filosofo_t*, struct filosofos_comendo_t*);
-	void (*remover_filosofo) (int, struct filosofos_comendo_t*);
-} filosofos_comendo_t;
-
-int adicionar_filosofo_comendo(filosofo_t* filosofo, filosofos_comendo_t* filosofos_comendo)
+void filosofo_esta_comendo(filosofo_t* filosofo, int* filosofos_comendo)
 {
-	// acha posição livre, para inserir o filosofo
-	int index_filosofo;
-	for (index_filosofo = 0; index_filosofo < *(filosofos_comendo->qtd_max_filosofos_comendo); index_filosofo++)
-	{
-		if (filosofos_comendo->posicoes_livres[index_filosofo] == LIVRE)
-		{
-			break;
-		}
-	}
-	pthread_mutex_lock(filosofos_comendo->mutex);
-	filosofos_comendo->filosofos[index_filosofo] = filosofo;
-	filosofos_comendo->posicoes_livres[index_filosofo] = OCUPADO;
-	(filosofos_comendo->qtd_filosofos_inseridos)++;
-	pthread_mutex_unlock(filosofos_comendo->mutex);
-	return index_filosofo;
+	filosofos_comendo[filosofo->id] = ESTA_COMENDO;
 }
 
-void remover_filosofo_comendo(int index_filosofo, filosofos_comendo_t* filosofos_comendo)
+void filosofo_terminou_de_comer(filosofo_t* filosofo, int* filosofos_comendo)
 {
-	pthread_mutex_lock(filosofos_comendo->mutex);
-	filosofos_comendo->filosofos[index_filosofo] = NULL;
-	filosofos_comendo->posicoes_livres[index_filosofo] = LIVRE;
-	(filosofos_comendo->qtd_filosofos_inseridos)--;
-	pthread_mutex_unlock(filosofos_comendo->mutex);
+	filosofos_comendo[filosofo->id] = NAO_ESTA_COMENDO;
 }
 
-int* create_lst_posicoes_livres(int num_posicoes_livres)
+int* create_vetor_estado_filosofos(int qtd_de_filosofos)
 {
-	int* npl = (int*)malloc(sizeof(int) * num_posicoes_livres);
-	if (npl != NULL)
+	int* npl = malloc(sizeof(int) * qtd_de_filosofos);
+	for (int i = 0; i < qtd_de_filosofos; i++)
 	{
-		for (int i = 0; i < num_posicoes_livres; i++)
-		{
-			npl[i] = LIVRE;
-		}
+		npl[i] = NAO_ESTA_COMENDO;
 	}
 	return npl;
-}
-
-filosofos_comendo_t* create_filosofos_comendo(int* qtd_max_filososfos_comendo, pthread_mutex_t* mutex_filosofos_comendo)
-{
-	filosofos_comendo_t* filosofos_comendo = (filosofos_comendo_t*)malloc(sizeof(filosofos_comendo_t));
-	if (filosofos_comendo != NULL)
-	{
-		filosofos_comendo->filosofos = (filosofo_t**)malloc(sizeof(filosofo_t*) * (*qtd_max_filososfos_comendo));
-		filosofos_comendo->mutex = mutex_filosofos_comendo;
-		filosofos_comendo->qtd_max_filosofos_comendo = qtd_max_filososfos_comendo;
-		filosofos_comendo->posicoes_livres = create_lst_posicoes_livres(*(qtd_max_filososfos_comendo));
-		filosofos_comendo->qtd_filosofos_inseridos = 0;
-		filosofos_comendo->adicionar_filosofo = adicionar_filosofo_comendo;
-		filosofos_comendo->remover_filosofo = remover_filosofo_comendo;
-	}
-	return filosofos_comendo;
 }
 
 typedef struct {
@@ -161,7 +109,7 @@ typedef struct {
 
 comeu_o_estipulado_t* create_comeu_o_estipulado(pthread_mutex_t* mutex_estipulado, sem_t* sem_alguem_comeu_o_estipulado)
 {
-	comeu_o_estipulado_t* estipulado = (comeu_o_estipulado_t*)malloc(sizeof(comeu_o_estipulado_t));
+	comeu_o_estipulado_t* estipulado = malloc(sizeof(comeu_o_estipulado_t));
 	if (estipulado != NULL)
 	{
 		estipulado->alguem_comeu = FALSE;
@@ -177,8 +125,10 @@ typedef struct {
 	hashi_t* hashi_1;
 	hashi_t* hashi_2;
 
-	filosofos_comendo_t* filosofos_comendo;
-	int index_filosofo_comendo;
+	int* filosofos_comendo;
+	int numero_de_filosofos;
+	void (*filosofo_estah_comendo) (filosofo_t*, int*);
+	void (*filosofo_terminou_de_comer) (filosofo_t*, int*);
 
 	int* qtd_que_precisa_comer;
 	comeu_o_estipulado_t* alguem_comeu_estipulado;
@@ -186,90 +136,97 @@ typedef struct {
 
 pkg_filosofo_t* create_pkg_filosofo(filosofo_t* f,
 	hashi_t* h1, hashi_t* h2,
-	filosofos_comendo_t* filosofos_comendo,
-	int* qtd_que_precisa_comer, comeu_o_estipulado_t* comeram_o_estipulado
+	int* filosofos_comendo, int* qtd_que_precisa_comer, int numero_de_filosofos,
+	comeu_o_estipulado_t* comeram_o_estipulado
 )
 {
-	pkg_filosofo_t* pkg = (pkg_filosofo_t*)malloc(sizeof(pkg_filosofo_t));
+	pkg_filosofo_t* pkg = malloc(sizeof(pkg_filosofo_t));
 	pkg->filosofo = f;
 	pkg->hashi_1 = h1;
 	pkg->hashi_2 = h2;
 	pkg->filosofos_comendo = filosofos_comendo;
-	pkg->index_filosofo_comendo = NAO_ESTA_NA_LISTA;
+	pkg->numero_de_filosofos = numero_de_filosofos;
 	pkg->qtd_que_precisa_comer = qtd_que_precisa_comer;
 	pkg->alguem_comeu_estipulado = comeram_o_estipulado;
 	return pkg;
 }
 
-void estou_comendo_com(filosofo_t* f, filosofos_comendo_t* fc)
+void estou_comendo_com(filosofo_t* f, pkg_filosofo_t* pf)
 {
-	int i, k;
-	pthread_mutex_lock(fc->mutex);
-	if (fc->qtd_filosofos_inseridos >= 3)
+	printf("estou_comendo_com => Filosofo %d comecou a observar\n", f->id);
+	int cont = 0;
+	char aux[40];
+	int tamanho_frase = 0;
+	tamanho_frase = sprintf_s(aux, 40, "Filosofo %d esta comendo ao mesmo tempo que os filosofos ", f->id);
+	int posicoes_a_mais = pf->numero_de_filosofos * 2;
+	int tamanho_total = tamanho_frase + posicoes_a_mais + 2;
+	char* saida = malloc(sizeof(char) * tamanho_total); // soma mais 2 para não dar erro n substituição da virgula por ponto
+	int i, escreveu_em;
+	if (saida != 0)
 	{
-		printf("Filosofo %d esta comendo ao mesmo tempo que os filosofos ", f->id);
-		// for pelas posições livres
-		for (i = 0, k = 0; i < (*(fc->qtd_max_filosofos_comendo)) - 1; i++, k++)
+		escreveu_em = sprintf_s(saida, tamanho_total, "Filosofo %d esta comendo ao mesmo tempo que os filosofos ", f->id);
+	}
+	for (i = 0; i < pf->numero_de_filosofos - 1; i++) {
+		if (i == f->id)
 		{
-			if (fc->posicoes_livres[i] == OCUPADO) {
-				if (k < fc->qtd_filosofos_inseridos)
-				{
-					printf("%d, ", fc->filosofos[i]->id);
-				}
-				else
-				{
-					printf("%d.\n", fc->filosofos[i]->id);
-				}
-			}
+			continue;
+		}
+		if (pf->filosofos_comendo[i] == ESTA_COMENDO)
+		{
+			cont++;
+			escreveu_em += sprintf_s(saida + escreveu_em, tamanho_total - escreveu_em, "%d,", i);
 		}
 	}
-	else if(fc->qtd_filosofos_inseridos == 2)
+	if (cont)
 	{
-		printf("Filosofo %d esta comendo ao mesmo tempo que o filosofo ", f->id);
-		for (i = 0, k = 0; i < (*(fc->qtd_max_filosofos_comendo)) - 1; i++, k++)
-		{
-			if (fc->posicoes_livres[i] == OCUPADO) {
-				if (k < fc->qtd_filosofos_inseridos)
-				{
-					printf("%d.\n", fc->filosofos[i]->id);
-					break;
-				}
-			}
-		}
-		// for pelas posições livres, com um break ao achar
+		saida[tamanho_frase + escreveu_em - 1] = '.';
+		saida[tamanho_frase + escreveu_em] = '\n';
+		printf(saida);
 	}
-	else if (fc->qtd_filosofos_inseridos == 1)
-	{
-		printf("Filosofo %d esta comendo sozinho.", f->id);
-	}
-	pthread_mutex_lock(fc->mutex);
+	printf("estou_comendo_com => Filosofo %d terminou de observar\n", f->id);
 }
 
 void* filosofo(void* arg)
 {
 	int vezes_que_comeu = 0;
 	pkg_filosofo_t* pf = (pkg_filosofo_t*)arg;
+	printf("Filosofo %d foi criado\n", pf->filosofo->id);
 	while (vezes_que_comeu < *(pf->qtd_que_precisa_comer)) {
+		printf("Entrou no while\n");
+		printf("Filosofo %d vai lockar 'pf->alguem_comeu_estipulado->mutex'\n", pf->filosofo->id);
 		pthread_mutex_lock(pf->alguem_comeu_estipulado->mutex);
+		printf("Filosofo %d lockou 'pf->alguem_comeu_estipulado->mutex'\n", pf->filosofo->id);
 		if (pf->alguem_comeu_estipulado->alguem_comeu == TRUE)
 		{
+			printf("if => Filosofo %d vai deslockar 'pf->alguem_comeu_estipulado->mutex'\n", pf->filosofo->id);
 			pthread_mutex_unlock(pf->alguem_comeu_estipulado->mutex);
+			printf("if => Filosofo %d deslockou 'pf->alguem_comeu_estipulado->mutex'\n", pf->filosofo->id);
 			return (void*)vezes_que_comeu;
 		}
 		else
 		{
+			printf("else => Filosofo %d vai deslockar 'pf->alguem_comeu_estipulado->mutex'\n", pf->filosofo->id);
 			pthread_mutex_unlock(pf->alguem_comeu_estipulado->mutex);
+			printf("else => Filosofo %d deslockou 'pf->alguem_comeu_estipulado->mutex'\n", pf->filosofo->id);
 			// esperar no semaforo do hashi_1 pra comer
+			printf("else => Filosofo %d vai esperar 'pf->hashi_1->sem_pode_comer'\n", pf->filosofo->id);
 			sem_wait(pf->hashi_1->sem_pode_comer);
+			printf("else => Filosofo %d esperou 'pf->hashi_1->sem_pode_comer'\n", pf->filosofo->id);
+			
 			// esperar no semaforo do hashi_2 pra comer
+			printf("else => Filosofo %d vai esperar 'pf->hashi_2->sem_pode_comer'\n", pf->filosofo->id);
 			sem_wait(pf->hashi_2->sem_pode_comer);
-			pf->index_filosofo_comendo = pf->filosofos_comendo->adicionar_filosofo(pf->filosofo, pf->filosofos_comendo);
+			printf("else => Filosofo %d esperou 'pf->hashi_2->sem_pode_comer'\n", pf->filosofo->id);
+
+			printf("Filosofo %d vai comer\n", pf->filosofo->id);
 			vezes_que_comeu++;
+
 			// travar mutex do filosofos_comendo
 			//  IDEIA DE UM IMPRESSOR, QUE RECEBE UMA NOTIFICAÇÂO DE QUE O FILOSOFO ESTÁ COMENDO E IMPRIME TODOS QUE ESTÃO COMENDO COM ELE
-			estou_comendo_com(pf->filosofo, pf->filosofos_comendo);
-			pf->filosofos_comendo->remover_filosofo(pf->index_filosofo_comendo, pf->filosofos_comendo);
-			pf->index_filosofo_comendo = NAO_ESTA_NA_LISTA;
+			estou_comendo_com(pf->filosofo, pf);
+			pf->filosofo_terminou_de_comer(pf->filosofo, pf->filosofos_comendo);
+
+			printf("Filosofo %d comeu\n", pf->filosofo->id);
 
 			// informa pelo semaforo do hashi_1 que está livre pra comer
 			sem_post(pf->hashi_1->sem_pode_comer);
@@ -292,44 +249,38 @@ void* filosofo(void* arg)
 int main()
 {
 	int n_filosofos = 5, vezes_a_comer = 10;
-	
-	int qtd_max_filososfos_comendo = n_filosofos - floor_int(n_filosofos / 2.0);
-	int index_filosofos_comendo = 0;
-	
+		
 	sem_t sem_alguem_comeu_o_estipulado;
 	sem_init(&sem_alguem_comeu_o_estipulado, 0, 1); // Começa liberado para um acesso porque o primeiro que acessar já mudará a flag que todos irão ler
 
 	pthread_mutex_t mutex_estipulado;
 	pthread_mutex_init(&mutex_estipulado, NULL);
 
+	printf("Criou as variáveis\n");
 	comeu_o_estipulado_t* estipulado = create_comeu_o_estipulado(&mutex_estipulado, &sem_alguem_comeu_o_estipulado);
 	
+	printf("Criou estipulado\n");
+
 	// lista de filosofos que estão comendo
 
-	pthread_mutex_t mutex_filosofos_comendo;
-	pthread_mutex_init(&mutex_filosofos_comendo, NULL);
-
-	filosofos_comendo_t* filosofos_comendo = create_filosofos_comendo(&qtd_max_filososfos_comendo, &mutex_filosofos_comendo);
-
 	// lista de thread de filosofos
-	filosofo_t** filosofos = (filosofo_t**)malloc(sizeof(filosofo_t*) * n_filosofos);
+	filosofo_t** filosofos = malloc(sizeof(filosofo_t*) * n_filosofos);
+
+	int* filosofos_comendo = malloc(sizeof(int) * n_filosofos);
 	int i;
-	if (filosofos != NULL)
+	for (i = 0; i < n_filosofos; i++)
 	{
-		for (i = 0; i < n_filosofos; i++)
-		{
-			filosofos[i] = create_filoso(i);
-		}
+		printf("Filosofo %d será criado\n", i);
+		filosofos[i] = create_filoso(i);
 	}
 
+	printf("Criou filosofos comenfo\n");
+
 	// lista de semaforos para os hashis
-	sem_t* semaphores_hashis = (sem_t*)malloc(sizeof(sem_t) * n_filosofos);
-	if (semaphores_hashis != NULL)
+	sem_t* semaphores_hashis = malloc(sizeof(sem_t) * n_filosofos);
+	for (i = 0; i < n_filosofos; i++)
 	{
-		for (i = 0; i < n_filosofos; i++)
-		{
-			sem_init(&semaphores_hashis[i], 0, 1);
-		}
+		sem_init(&semaphores_hashis[i], 0, 1);
 	}
 
 	// lista de hashis
@@ -343,21 +294,17 @@ int main()
 	pkg_filosofo_t** pkgs = (pkg_filosofo_t**)malloc(sizeof(pkg_filosofo_t) * n_filosofos);
 	for (i = 0; i < n_filosofos; i++)
 	{
-		pkgs[i] = create_pkg_filosofo(filosofos[i], hashis[i], hashis[i + 1], filosofos_comendo, &vezes_a_comer, estipulado);
+		pkgs[i] = create_pkg_filosofo(filosofos[i], hashis[i], hashis[(n_filosofos + i) % n_filosofos], filosofos_comendo, &vezes_a_comer, n_filosofos, estipulado);
 	}
 
 	// criação das threads
-	pthread_t* threads_filosofos = (pthread_t*)malloc(sizeof(pthread_t*) * n_filosofos);
-	if (threads_filosofos != NULL)
-	{
-		for (i = 0; i < n_filosofos; i++) {
-			pthread_create(&threads_filosofos[i], NULL, &filosofo, (void*) pkgs[i]);
-		}
-		for (i = 0; i < n_filosofos; i++) {
-			pthread_join(threads_filosofos[i], NULL);
-		}
+	pthread_t* threads_filosofos = (pthread_t*)malloc(sizeof(pthread_t) * n_filosofos);
+	for (i = 0; i < n_filosofos; i++) {
+		pthread_create(&threads_filosofos[i], NULL, &filosofo, (void*)pkgs[i]);
 	}
-
+	for (i = 0; i < n_filosofos; i++) {
+		pthread_join(threads_filosofos[i], NULL);
+	}
 
 	return 0;
 }
