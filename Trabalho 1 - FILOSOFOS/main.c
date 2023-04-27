@@ -224,9 +224,15 @@ void* filosofo(void* arg)
 	// a main irá cancelar todas as outras threads e esperará num join
 }
 
-int main()
+int main(int argc, char* argv[])
 {
-	int n_filosofos = 500, vezes_a_comer = 10;
+	if (argc != 3) { // 1 do nome do programa e 2 dos parâmetros
+		return 0;
+	}
+	int n_filosofos, vezes_a_comer;
+	n_filosofos = atoi(argv[1]);
+	vezes_a_comer = atoi(argv[2]);
+	//int n_filosofos = 500, vezes_a_comer = 10;
 		
 	sem_t pode_encerrar;
 	sem_init(&pode_encerrar, 0, 0); // Começa liberado para um acesso porque o primeiro que acessar já mudará a flag que todos irão ler
