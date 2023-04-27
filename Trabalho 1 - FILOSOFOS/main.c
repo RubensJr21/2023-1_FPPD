@@ -113,6 +113,8 @@ typedef struct {
 	void (*filosofo_terminou_de_comer) (filosofo_t*, int*);
 	int* qtd_que_precisa_comer;
 
+	int vezes_que_comeu;
+
 	sem_t* sem_pode_encerrar;
 } pkg_filosofo_t;
 
@@ -130,6 +132,7 @@ pkg_filosofo_t* create_pkg_filosofo(filosofo_t* f,
 	pkg->filosofos_comendo = filosofos_comendo;
 	pkg->numero_de_filosofos = numero_de_filosofos;
 	pkg->qtd_que_precisa_comer = qtd_que_precisa_comer;
+	pkg->vezes_que_comeu = 0;
 	pkg->sem_pode_encerrar = pode_encerrar;
 	return pkg;
 }
@@ -177,10 +180,9 @@ void estou_comendo_com(filosofo_t* f, pkg_filosofo_t* pf)
 
 void* filosofo(void* arg)
 {
-	int vezes_que_comeu = 0;
 	pkg_filosofo_t* pf = (pkg_filosofo_t*)arg;
 	//printf("Filosofo %d foi criado\n", pf->filosofo->id);
-	while (vezes_que_comeu < *(pf->qtd_que_precisa_comer)) {
+	while (pf->vezes_que_comeu < *(pf->qtd_que_precisa_comer)) {
 		//printf("while => Filosofo %d vai lockar 'pf->mutex_saleiro'\n", pf->filosofo->id);
 		pthread_mutex_lock(pf->mutex_saleiro);
 		//printf("while => Filosofo %d lockou 'pf->mutex_saleiro'\n", pf->filosofo->id);
@@ -202,7 +204,7 @@ void* filosofo(void* arg)
 		//printf("while => Filosofo %d deslockou 'pf->mutex_saleiro'\n", pf->filosofo->id);
 
 		//printf("Filosofo %d vai comer\n", pf->filosofo->id);
-		vezes_que_comeu++;
+		pf->vezes_que_comeu++;
 
 		filosofo_esta_comendo(pf->filosofo, pf->filosofos_comendo);
 		
@@ -220,8 +222,6 @@ void* filosofo(void* arg)
 
 	sem_post(pf->sem_pode_encerrar);
 	// a main irá cancelar todas as outras threads e esperará num join
-
-	return (void*) vezes_que_comeu;
 }
 
 int main()
@@ -283,6 +283,7 @@ int main()
 
 	for (i = 0; i < n_filosofos; i++)
 	{
+		// https://www.ibm.com/docs/en/zos/2.2.0?topic=functions-pthread-cancel-cancel-thread
 		pthread_cancel(threads_filosofos[i]);
 	}
 
@@ -295,6 +296,13 @@ int main()
 
 	pthread_mutex_destroy(&mutex_saleiro);
 
+	pkg_filosofo_t* pkg;
+
+	for (i = 0; i < n_filosofos; i++)
+	{
+		pkg = pkgs[i];
+		printf("Filosofo %d comeu %d vezes.\n", pkg->filosofo->id, pkg->vezes_que_comeu);
+	}
 	/*for (i = 0; i < n_filosofos; i++) {
 		pthread_join(threads_filosofos[i], NULL);
 	}*/
