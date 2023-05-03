@@ -34,33 +34,46 @@
 
 #include <stdio.h>
 
+typedef int *mensagens_t;
+typedef int id_t;
+
 typedef struct{
-	int* mensagens; // variável compartilhada entre os sites A e B
+	mensagens_t mensagens; // variável compartilhada entre os sites A e B
+	int limite;
 }pombo_t, *pombo_pt;
 
+pombo_pt create_pombo(int limite_mensagens, mensagens_t m)
+{
+	pombo_pt p = malloc(sizeof(pombo_pt));
+	p->limite = limite_mensagens;
+	p->mensagens = m;
+	return NULL;
+}
 
 typedef struct site_t{
-	int id;
+	id_t id;
 	pombo_pt pombo
-}site_A_t, site_B_t, *site_A_pt, *site_B_pt;
+}site_t, *site_pt, site_A_t, site_B_t, *site_A_pt, *site_B_pt;
 
 typedef struct {
-	int id;
+	id_t id;
 	pombo_pt pombo;
 }pkg_site_A_t, pkg_site_B_t, *pkg_site_A_pt, *pkg_site_B_pt;
 
-struct site* create_site(int id, pombo_pt p)
+site_pt create_site(id_t id, pombo_pt p)
 {
-	struct site* s = NULL;
-	return s;
+	site_pt site = malloc(sizeof(site_t));
+	site->id = id;
+	site->pombo = p;
+	return site;
 }
 
-site_A_pt create_site_A(int id, pombo_pt p)
+site_A_pt create_site_A(id_t id, pombo_pt p)
 {
 	return create_site(id, p);
 }
 
-site_B_pt create_site_B(int id, pombo_pt p)
+site_B_pt create_site_B(id_t id, pombo_pt p)
 {
 	return create_site(id, p);
 }
