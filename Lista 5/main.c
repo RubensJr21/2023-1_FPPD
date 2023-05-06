@@ -2,6 +2,7 @@
 #pragma once
 #define _CRT_SECURE_NO_WARNINGS 1
 #define _WINSOCK_DEPRECATED_NO_WARNINGS 1
+#pragma warning(disable:6011)
 
 /*
 	Structs:
@@ -32,17 +33,21 @@
 			-> nos casos de concorrência, tipo com mutex, semáforo
 */
 
+#include <pthread.h>
+#include <semaphore.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <Windows.h>
 
-typedef int *mensagens_t;
+typedef int mensagens_t, *mensagens_pt;
 typedef int id_t;
 
-typedef struct{
-	mensagens_t mensagens; // variável compartilhada entre os sites A e B
+typedef struct pombo_t{
+	mensagens_pt mensagens; // variável compartilhada entre os sites A e B
 	int limite;
 }pombo_t, *pombo_pt;
 
-pombo_pt create_pombo(int limite_mensagens, mensagens_t m)
+pombo_pt create_pombo(int limite_mensagens, mensagens_pt m)
 {
 	pombo_pt p = malloc(sizeof(pombo_pt));
 	p->limite = limite_mensagens;
@@ -50,35 +55,62 @@ pombo_pt create_pombo(int limite_mensagens, mensagens_t m)
 	return NULL;
 }
 
-typedef struct site_t{
-	id_t id;
-	pombo_pt pombo
-}site_t, *site_pt, site_A_t, site_B_t, *site_A_pt, *site_B_pt;
-
-typedef struct {
+typedef struct pkg_site_t{
 	id_t id;
 	pombo_pt pombo;
-}pkg_site_A_t, pkg_site_B_t, *pkg_site_A_pt, *pkg_site_B_pt;
+}pkg_site_t, *pkg_site_pt, pkg_site_A_t, pkg_site_B_t, *pkg_site_A_pt, *pkg_site_B_pt;
 
-site_pt create_site(id_t id, pombo_pt p)
+pkg_site_pt create_pkg_site(id_t id, pombo_pt p)
 {
-	site_pt site = malloc(sizeof(site_t));
+	pkg_site_pt site = malloc(sizeof(pkg_site_t));
 	site->id = id;
 	site->pombo = p;
 	return site;
 }
 
-site_A_pt create_site_A(id_t id, pombo_pt p)
+pkg_site_A_pt create_pkg_site_A(id_t id, pombo_pt p)
 {
-	return create_site(id, p);
+	return create_pkg_site(id, p);
 }
 
-site_B_pt create_site_B(id_t id, pombo_pt p)
+void *site_A(void *args)
 {
-	return create_site(id, p);
+	printf("Thread A foi criada\n");
+	printf("Thread A será encerrada\n");
+	return NULL;
+}
+
+pkg_site_B_pt create_pkg_site_B(id_t id, pombo_pt p)
+{
+	return create_pkg_site(id, p);
+}
+
+void* site_B(void* args)
+{
+	printf("Thread B foi criada\n");
+	printf("Thread B será encerrada\n");
+	return NULL;
 }
 
 int main()
 {
+	mensagens_t mensagens = 0;
+	pombo_pt pombo = create_pombo(20, &mensagens);
+
+	id_t id_A = 0, id_B = 1;
+
+	pkg_site_A_pt pkg_A = create_pkg_site_A(id_A, pombo);
+	pkg_site_B_pt pkg_B = create_pkg_site_B(id_B, pombo);
+
+	pthread_t tsite_A, tsite_B;
+
+	pthread_create(&tsite_A, NULL, &site_A, (void*)pkg_A);
+	pthread_create(&tsite_B, NULL, &site_B, (void*)pkg_B);
+
+	pthread_join(tsite_A, NULL);
+	printf("Thread A foi encerrada\n");
+	pthread_join(tsite_B, NULL);
+	printf("Thread B foi encerrada\n");
+
 	return 0;
 }

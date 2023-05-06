@@ -2,6 +2,7 @@
 #pragma once
 #define _CRT_SECURE_NO_WARNINGS 1
 #define _WINSOCK_DEPRECATED_NO_WARNINGS 1
+#pragma warning(disable:6011)
 
 // Código começa aqui
 

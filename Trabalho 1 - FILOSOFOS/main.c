@@ -2,6 +2,13 @@
 #pragma once
 #define _CRT_SECURE_NO_WARNINGS 1
 #define _WINSOCK_DEPRECATED_NO_WARNINGS 1
+#pragma warning(disable:6011)
+#pragma warning(disable:6385)
+// https://learn.microsoft.com/pt-br/cpp/code-quality/c6385?view=msvc-170
+#pragma warning(disable:6386)
+// https://learn.microsoft.com/pt-br/cpp/code-quality/c6386?view=msvc-170
+#pragma warning(disable:6387)
+// https://learn.microsoft.com/pt-br/cpp/code-quality/c6387?view=msvc-170
 
 // Código começa aqui
 
