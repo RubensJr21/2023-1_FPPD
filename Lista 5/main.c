@@ -48,134 +48,110 @@ typedef int id_t;
 typedef struct pombo{
 	mensagens_pt mensagens; // variável compartilhada entre os sites A e B
 	int limite;
-	sem_t* semaphore;
+	sem_t* sem_pode_escrever;
+	sem_t* sem_pode_entregar;
+	pthread_mutex_t* mutex;
 }pombo_t, *pombo_pt;
 
-pombo_pt create_pombo(int limite_mensagens, mensagens_pt m, sem_t* sp)
+pombo_pt create_pombo(int limite_mensagens, mensagens_pt m, sem_t* s_pode_escrever, sem_t* s_pode_entregar, pthread_mutex_t* mutex)
 {
-	pombo_pt p = malloc(sizeof(pombo_pt));
+	pombo_pt p = malloc(sizeof(pombo_t));
 	p->limite = limite_mensagens;
 	p->mensagens = m;
-	p->semaphore = sp;
+	p->sem_pode_escrever = s_pode_escrever;
+	p->sem_pode_entregar = s_pode_entregar;
+	p->mutex = mutex;
 	return p;
 }
 
-/*
 typedef struct{
 	id_t id;
 	pombo_pt pombo;
-}pkg_site_t, *pkg_site_pt;
+}pkg_usuario_t, *pkg_usuario_pt;
 
-typedef pkg_site_t pkg_site_A_t, pkg_site_B_t;
-typedef pkg_site_pt pkg_site_A_pt, pkg_site_B_pt;
-*/
-
-typedef struct{
-	id_t id;
-	pombo_pt pombo;
-}pkg_site_A_t, *pkg_site_A_pt;
-
-typedef struct {
-	id_t id;
-	pombo_pt pombo;
-}pkg_site_B_t, *pkg_site_B_pt;
-
-pkg_site_A_pt create_pkg_site_A(id_t id, pombo_pt p)
+pkg_usuario_pt create_pkg_usuario(id_t id, pombo_pt p)
 {
-	pkg_site_A_pt site = malloc(sizeof(pkg_site_A_t));
-	if (!site)
-	{
-		printf("create_pkg_site_A: DEU ERRO!!!\n");
-		return NULL;
-	}
+	pkg_usuario_pt site = malloc(sizeof(pkg_usuario_t));
 	site->id = id;
 	site->pombo = p;
 	return site;
 }
 
-void *site_A(void *args)
+void *t_pombo(void* args)
 {
-	//printf("Thread A foi criada\n");
-	pkg_site_A_pt pkg_a = (pkg_site_A_pt)args;
-	pombo_pt pombo = pkg_a->pombo;
-	int i;
+	pombo_pt pombo = (pombo_pt) args;
+	mensagens_pt p_mensagens = pombo->mensagens;
 	while (TRUE)
 	{
-		sem_wait(pombo->semaphore);
-		for (i = 1; i <= pombo->limite; i++)
+		sem_wait(pombo->sem_pode_entregar);
+		// mutex
+		pthread_mutex_lock(pombo->mutex);
+		for (; (*p_mensagens) > 0; (*p_mensagens)--)
 		{
-			pombo->mensagens++;
-			printf("Site A: escrevendo mensagem %d\n", i);
+			printf("pombo entregando mensagem de numero: %d\n", (pombo->limite - (*p_mensagens)) + 1);
+			sem_post(pombo->sem_pode_escrever);
 		}
-		//envia mensagens
-		sem_post(pombo->semaphore);
+		// libera mutex
+		pthread_mutex_unlock(pombo->mutex);
 	}
-	//printf("Thread A serah encerrada\n");
-	return NULL;
 }
 
-pkg_site_B_pt create_pkg_site_B(id_t id, pombo_pt p)
+void* t_usuario(void* args)
 {
-	pkg_site_B_pt site = malloc(sizeof(pkg_site_B_t));
-	if (!site)
-	{
-		printf("create_pkg_site_B: DEU ERRO!!!\n");
-		return NULL;
-	}
-	site->id = id;
-	site->pombo = p;
-	return site;
-}
-
-void* site_B(void* args)
-{
-	pkg_site_B_pt pkg_b = (pkg_site_B_pt)args;
-	pombo_pt pombo = pkg_b->pombo;
+	pkg_usuario_pt usuario = (pkg_usuario_pt)args;
+	pombo_pt pombo = usuario->pombo;
 	while (TRUE)
 	{
-		// aguardar receber mensagens
-		sem_wait(pombo->semaphore);
-		// assim que receber imprime quais mensagens recebeu
-		/*
-		loop até quantidade de mensagens
-			imprime "mensagem x recebida"
-		*/
-		printf("Site B: recebeu %d mensagen(s)\n", *(pombo->mensagens));
-		*(pombo->mensagens) = 0;
-		sem_post(pombo->semaphore);
+		sem_wait(pombo->sem_pode_escrever);
+		// mutex aqui
+		pthread_mutex_lock(pombo->mutex);
+		(*(pombo->mensagens))++;
+		printf("usuario %d escrevendo mensagem de numero %d no pombo\n", usuario->id, (*(pombo->mensagens)));
+		if (pombo->limite == (*(pombo->mensagens)))
+		{
+			// pombo trabalha
+			sem_post(pombo->sem_pode_entregar);
+		}
+		pthread_mutex_unlock(pombo->mutex);
 	}
-	/*printf("Thread B foi criada\n");
-	printf("Thread B serah encerrada\n");*/
-	return NULL;
 }
+
+#define LIMITE_MENSAGENS 20
+#define QTD_USUARIOS 50
 
 int main()
 {
-	sem_t sem_pombo;
-	sem_init(&sem_pombo, 0, 1);
+	sem_t sem_pode_escrever;
+	sem_init(&sem_pode_escrever, 0, LIMITE_MENSAGENS);
+	sem_t sem_pode_entregar;
+	sem_init(&sem_pode_entregar, 0, 0);
+	pthread_mutex_t mutex_pombo;
+	pthread_mutex_init(&mutex_pombo, NULL);
 	mensagens_t mensagens = 0;
-	pombo_pt pombo = create_pombo(20, &mensagens, &sem_pombo);
+	
+	pombo_pt pombo = create_pombo(LIMITE_MENSAGENS, &mensagens, &sem_pode_escrever, &sem_pode_entregar, &mutex_pombo);
 
-	id_t id_A = 0, id_B = 1;
+	pthread_t thread_pombo;
+	pthread_create(&thread_pombo, NULL, &t_pombo, (void*)pombo);
 
-	pkg_site_A_pt pkg_A = create_pkg_site_A(id_A, pombo);
-	pkg_site_B_pt pkg_B = create_pkg_site_B(id_B, pombo);
-
-	if (!pkg_A || !pkg_B)
+	pthread_t* usuarios = malloc(sizeof(pthread_t) * QTD_USUARIOS);
+	pkg_usuario_t** pkgs_usuarios = malloc(sizeof(pkg_usuario_t *) * QTD_USUARIOS);;
+	int i;
+	for (i = 0; i < QTD_USUARIOS; i++)
 	{
-		printf("Saindo do progrma...\n");
-		return -1;
+		pkgs_usuarios[i] = create_pkg_usuario(i + 1, pombo);
 	}
 
-	pthread_t tsite_A, tsite_B;
+	for (i = 0; i < QTD_USUARIOS; i++)
+	{
+		pthread_create(&usuarios[i], NULL, &t_usuario, (void*)pkgs_usuarios[i]);
+		
+	}
 
-	pthread_create(&tsite_A, NULL, &site_A, (void*)pkg_A);
-	pthread_create(&tsite_B, NULL, &site_B, (void*)pkg_B);
-
-	pthread_join(tsite_A, NULL);
-	printf("Thread A foi encerrada\n");
-	pthread_join(tsite_B, NULL);
-	printf("Thread B foi encerrada\n");
-
+	pthread_join(thread_pombo, NULL);
+	for (i = 0; i < QTD_USUARIOS; i++)
+	{
+		pthread_join(usuarios[i], NULL);
+	}
 	return 0;
 }
