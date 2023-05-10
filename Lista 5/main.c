@@ -83,15 +83,17 @@ void *t_pombo(void* args)
 	mensagens_pt p_mensagens = pombo->mensagens;
 	while (TRUE)
 	{
+		// Nessa parte a thread pombo espera até que ele poxa executar o fluxo de "entrega"
 		sem_wait(pombo->sem_pode_entregar);
-		// mutex
+		// Nesse ponto é garantido o acesso exclusivo à área de memória que é compartilhada (pombo->mensagens)
 		pthread_mutex_lock(pombo->mutex);
 		for (; (*p_mensagens) > 0; (*p_mensagens)--)
 		{
 			printf("pombo entregando mensagem de numero: %d\n", (pombo->limite - (*p_mensagens)) + 1);
+			// Esse semaforo é usado para sinalizar para os usuários que eles podem voltar a escrever
 			sem_post(pombo->sem_pode_escrever);
 		}
-		// libera mutex
+		// Nesse ponto é liberado o acesso da área de memória que é compartilhada (pombo->mensagens) para as outras threads (usuário)
 		pthread_mutex_unlock(pombo->mutex);
 	}
 }
@@ -102,16 +104,18 @@ void* t_usuario(void* args)
 	pombo_pt pombo = usuario->pombo;
 	while (TRUE)
 	{
+		// Na primeira iteração existem 20 vagas a serem ocupadas, todas as threads tentam, mas apenas 20 threads usuários conseguem o acesso
 		sem_wait(pombo->sem_pode_escrever);
-		// mutex aqui
+		// Nesse ponto é garantido o acesso exclusivo à área de memória que é compartilhada (pombo->mensagens)
 		pthread_mutex_lock(pombo->mutex);
 		(*(pombo->mensagens))++;
 		printf("usuario %d escrevendo mensagem de numero %d no pombo\n", usuario->id, (*(pombo->mensagens)));
 		if (pombo->limite == (*(pombo->mensagens)))
 		{
-			// pombo trabalha
+			// Esse semaforo informa à thread pombo que ele já pode comerçar o fluxo de "entrega" das mensagens
 			sem_post(pombo->sem_pode_entregar);
 		}
+		// Nesse ponto é liberado o acesso da área de memória que é compartilhada (pombo->mensagens) para as outras threads (usuário)
 		pthread_mutex_unlock(pombo->mutex);
 	}
 }
