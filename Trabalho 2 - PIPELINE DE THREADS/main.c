@@ -43,19 +43,19 @@
 
 typedef struct {
 	id_t id;
-}geradora;
+}thread_geradora_t, *thread_geradora_pt;
 
 typedef struct {
 	id_t id;
-	int *buffer_in;
-	int *buffer_out;
-	int *primos;
-}sieve_processamento;
+	int *buffer_in; // tamanho K
+	int *buffer_out; // tamanho K
+	int *primos; // tamanho X
+}thread_sieve_processamento_t, *thread_sieve_processamento_pt;
 
 typedef struct {
 	id_t id;
-	int qtd_primos;
-}resultado;
+	int *qtd_primos; // tamanho X/ln(x)
+}thread_resultado_t, * thread_resultado_pt;
 
 #define TRUE 1
 #define FALSE 0
