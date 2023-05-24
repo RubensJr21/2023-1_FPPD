@@ -36,31 +36,115 @@
 
 	./primes.exe <N> <M> <K> <X>
 	
-	
 */
 
 #define id_t int
+#define primos_t int*
+#define bignumber_t long long
+
+typedef struct {
+	int* index;
+	int* buffer;
+	int max_size_buffer;
+	pthread_mutex_t* mutex;
+}buffer_t, *buffer_pt;
+
+buffer_pt create_buffer(int* index, int* buffer, int max_size_buffer, pthread_mutex_t* mutex)
+{
+	buffer_pt b = malloc(sizeof(buffer_t));
+	b->index = index;
+	b->buffer = buffer;
+	b->max_size_buffer = max_size_buffer;
+	b->mutex = mutex;
+	return buffer;
+}
 
 typedef struct {
 	id_t id;
-}thread_geradora_t, *thread_geradora_pt;
+	buffer_pt buffer_out;
+}pkg_thread_geradora_t, *pkg_thread_geradora_pt;
 
 typedef struct {
 	id_t id;
-	int *buffer_in; // tamanho K
-	int *buffer_out; // tamanho K
-	int *primos; // tamanho X
-}thread_sieve_processamento_t, *thread_sieve_processamento_pt;
+	buffer_pt buffer_in; // tamanho K
+	buffer_pt buffer_out; // tamanho K
+	primos_t primos; // tamanho X
+}pkg_thread_sieve_processamento_t, *pkg_thread_sieve_processamento_pt;
 
 typedef struct {
 	id_t id;
 	int *qtd_primos; // tamanho X/ln(x)
-}thread_resultado_t, * thread_resultado_pt;
+}pkg_thread_resultado_t, * pkg_thread_resultado_pt;
 
 #define TRUE 1
 #define FALSE 0
 
+pkg_thread_geradora_pt create_pkg_thread_geradora(id_t id)
+{
+	pkg_thread_geradora_pt tg = malloc(sizeof(pkg_thread_geradora_t));
+	tg->id = id;
+	return tg;
+}
+
+void* thread_geradora(void* args)
+{
+	pkg_thread_geradora_pt pkg = (pkg_thread_geradora_pt)args;
+	buffer_pt buffer = pkg->buffer_out;
+	bignumber_t number = 0;
+	while (TRUE)
+	{
+		// envia o número para a primeira thread de processamento
+		pthread_mutex_lock(buffer->mutex);
+		int* i = buffer->index;
+		buffer->buffer[*i] = number++;
+		(*i)++;
+		pthread_mutex_unlock(buffer->mutex);
+	}
+	return NULL;
+}
+
+pkg_thread_sieve_processamento_pt create_pkg_thread_sieve_processamento(id_t id, buffer_pt buffer_in, buffer_pt buffer_out, primos_t primos)
+{
+	pkg_thread_sieve_processamento_pt tsp = malloc(sizeof(pkg_thread_sieve_processamento_t));
+	tsp->id = id;
+	tsp->buffer_in = buffer_in;
+	tsp->buffer_out = buffer_out;
+	tsp->primos = primos;
+	return tsp;
+}
+
+void* thread_sieve_processamento(void* args)
+{
+	return NULL;
+}
+
+pkg_thread_resultado_pt create_pkg_thread_resultado(id_t id)
+{
+	pkg_thread_resultado_pt ts = malloc(sizeof(pkg_thread_resultado_t));
+	ts->id = id;
+	ts->qtd_primos;
+	return (pkg_thread_resultado_pt)NULL;
+}
+
+void* thread_resultado(void* args)
+{
+	return NULL;
+}
+
 int main(int argc, char *argv[])
 {
+
+	pthread_t t_geradora, t_resultado;
+
+	pthread_create(&t_geradora, NULL, &thread_geradora, NULL);
+	pthread_create(&t_resultado, NULL, &thread_geradora, NULL);
+
+	/*
+		threads de processamento
+	*/
+
+	pthread_cancel(t_geradora);
+	pthread_cancel(t_resultado);
+
 	return 0;
 }
