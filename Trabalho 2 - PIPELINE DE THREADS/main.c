@@ -43,20 +43,34 @@
 #define bignumber_t long long
 
 typedef struct {
-	int* index;
-	int* buffer;
+	int* current_index;
+	bignumber_t* buffer;
 	int max_size_buffer;
 	pthread_mutex_t* mutex;
 }buffer_t, *buffer_pt;
 
-buffer_pt create_buffer(int* index, int* buffer, int max_size_buffer, pthread_mutex_t* mutex)
+buffer_pt create_buffer(int max_size_buffer, int* current_index)
 {
+	pthread_mutex_t* mutex = malloc(sizeof(pthread_mutex_t));
+	pthread_mutex_init(mutex, NULL);
 	buffer_pt b = malloc(sizeof(buffer_t));
-	b->index = index;
-	b->buffer = buffer;
+	b->current_index = current_index;
+	b->buffer = malloc(sizeof(bignumber_t) * max_size_buffer);
 	b->max_size_buffer = max_size_buffer;
 	b->mutex = mutex;
-	return buffer;
+	return b;
+}
+
+void insertInBuffer(buffer_pt buffer, bignumber_t number)
+{
+	// envia o número para a primeira thread de processamento
+	pthread_mutex_lock(buffer->mutex);
+	if (*(buffer->current_index) < buffer->max_size_buffer)
+	{
+		buffer->buffer[(*(buffer->current_index))++] = number;
+	}
+	pthread_mutex_unlock(buffer->mutex);
+	printf("numero recebido: %lld\n", number);
 }
 
 typedef struct {
@@ -79,10 +93,11 @@ typedef struct {
 #define TRUE 1
 #define FALSE 0
 
-pkg_thread_geradora_pt create_pkg_thread_geradora(id_t id)
+pkg_thread_geradora_pt create_pkg_thread_geradora(id_t id, buffer_pt buffer)
 {
 	pkg_thread_geradora_pt tg = malloc(sizeof(pkg_thread_geradora_t));
 	tg->id = id;
+	tg->buffer_out = buffer;
 	return tg;
 }
 
@@ -93,12 +108,7 @@ void* thread_geradora(void* args)
 	bignumber_t number = 0;
 	while (TRUE)
 	{
-		// envia o número para a primeira thread de processamento
-		pthread_mutex_lock(buffer->mutex);
-		int* i = buffer->index;
-		buffer->buffer[*i] = number++;
-		(*i)++;
-		pthread_mutex_unlock(buffer->mutex);
+		insertInBuffer(buffer, number++);
 	}
 	return NULL;
 }
@@ -133,11 +143,19 @@ void* thread_resultado(void* args)
 
 int main(int argc, char *argv[])
 {
-
 	pthread_t t_geradora, t_resultado;
 
-	pthread_create(&t_geradora, NULL, &thread_geradora, NULL);
-	pthread_create(&t_resultado, NULL, &thread_geradora, NULL);
+	int max_size_of_buffer = 10;
+
+	int index_of_buffer_geradora = 0;
+
+	buffer_pt buffer_out_geradora = create_buffer(max_size_of_buffer, &index_of_buffer_geradora);
+
+	pkg_thread_geradora_pt pkg_tg = create_pkg_thread_geradora(1, buffer_out_geradora);
+	pkg_thread_resultado_pt pkg_tr = create_pkg_thread_resultado(2);
+
+	pthread_create(&t_geradora, NULL, &thread_geradora, (void*) &pkg_tg);
+	pthread_create(&t_resultado, NULL, &thread_geradora, (void*) &pkg_tr);
 
 	/*
 		threads de processamento

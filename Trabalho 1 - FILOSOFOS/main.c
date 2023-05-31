@@ -320,7 +320,7 @@ int main(int argc, char* argv[])
 		pthread_join(threads_filosofos[i], NULL);
 	}*/
 
-
+	printf("%d\n", i);
 
 	return 0;
 }
