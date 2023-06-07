@@ -40,46 +40,50 @@
 */
 
 #define id_t int
-#define primos_t int*
+#define bufer_primos_pt long long*
 #define bignumber_t long long
+#define round_t int
+
+typedef struct {
+	bignumber_t number;
+	round_t round;
+	id_t id_Thread_que_resolveu;
+} pkg_number_to_veriry_t, *pkg_number_to_veriry_pt, numeros_primos_t, *numeros_primos_pt;
+
+pkg_number_to_veriry_pt create_pkg_number_to_veriry(bignumber_t number)
+{
+	pkg_number_to_veriry_pt pkg = malloc(sizeof(pkg_number_to_veriry_t));
+	pkg->number = number;
+	pkg->round = 0;
+	pkg->id_Thread_que_resolveu = -1;
+	return pkg;
+}
 
 typedef struct {
 	int* current_index;
-	bignumber_t* buffer;
+	pkg_number_to_veriry_pt* buffer;
 	int max_size_buffer;
 	pthread_mutex_t* mutex;
+	pthread_cond_t* cond;
 }buffer_t, *buffer_pt;
 
 buffer_pt create_buffer(int max_size_buffer)
 {
-	int* index_of_buffer_geradora = malloc(sizeof(int));
-	*index_of_buffer_geradora = 0;
+	int* index = malloc(sizeof(int));
+	*index = 0;
 
 	pthread_mutex_t* mutex = malloc(sizeof(pthread_mutex_t));
 	pthread_mutex_init(mutex, NULL);
+	pthread_cond_t* cond = malloc(sizeof(pthread_cond_t));
+	pthread_cond_init(cond, NULL);
+
 	buffer_pt b = malloc(sizeof(buffer_t));
-	b->current_index = index_of_buffer_geradora;
-	b->buffer = malloc(sizeof(bignumber_t) * max_size_buffer);
+	b->current_index = index;
+	b->buffer = malloc(sizeof(pkg_number_to_veriry_t) * max_size_buffer);
 	b->max_size_buffer = max_size_buffer;
 	b->mutex = mutex;
+	b->cond = cond;
 	return b;
-}
-
-void insertInBuffer(buffer_pt buffer, bignumber_t number)
-{
-	// envia o número para a primeira thread de processamento
-	pthread_mutex_lock(buffer->mutex);
-	if (*(buffer->current_index) < buffer->max_size_buffer)
-	{
-		buffer->buffer[(*(buffer->current_index))++] = number;
-	}
-	else
-	{
-		system("pause");
-		// esperar liberar
-	}
-	pthread_mutex_unlock(buffer->mutex);
-	printf("numero recebido: %lld\n", number);
 }
 
 typedef struct {
@@ -91,12 +95,12 @@ typedef struct {
 	id_t id;
 	buffer_pt buffer_in; // tamanho K
 	buffer_pt buffer_out; // tamanho K
-	primos_t primos; // tamanho X
+	bufer_primos_pt primos; // tamanho X
 }pkg_thread_sieve_processamento_t, *pkg_thread_sieve_processamento_pt;
 
 typedef struct {
 	id_t id;
-	int *qtd_primos; // tamanho X/ln(x)
+	buffer_pt buffer_resultados; // tamanho X/ln(x)
 }pkg_thread_resultado_t, * pkg_thread_resultado_pt;
 
 #define TRUE 1
@@ -110,38 +114,67 @@ pkg_thread_geradora_pt create_pkg_thread_geradora(id_t id, buffer_pt buffer)
 	return tg;
 }
 
+void insertInBuffer(buffer_pt buffer, pkg_number_to_veriry_pt number_to_verify)
+{
+	
+}
+
 void* thread_geradora(void* args)
 {
 	pkg_thread_geradora_pt pkg = (pkg_thread_geradora_pt)args;
 	buffer_pt buffer = pkg->buffer_out;
-	bignumber_t number = 0;
+	bignumber_t number = 1;
+	pkg_number_to_veriry_pt ntv;
 	while (TRUE)
 	{
-		insertInBuffer(buffer, number++);
+		ntv = create_pkg_number_to_veriry(number);
+		pthread_mutex_lock(buffer->mutex);
+		printf("numero gerado: %lld\n", ntv->number);
+		// envia o número para a primeira thread de processamento
+		if (*(buffer->current_index) < buffer->max_size_buffer)
+		{
+			buffer->buffer[(*(buffer->current_index))++] = ntv;
+			pthread_mutex_unlock(buffer->mutex);
+		}
+		else
+		{
+			// system("pause");
+			// esperar liberar
+			// usar cond
+			pthread_cond_wait(buffer->cond, buffer->mutex);
+			// buffer circular
+			buffer->buffer[(*(buffer->current_index))++] = ntv;
+			pthread_mutex_unlock(buffer->mutex);
+		}
+		number++;
 	}
 	return NULL;
 }
 
-pkg_thread_sieve_processamento_pt create_pkg_thread_sieve_processamento(id_t id, buffer_pt buffer_in, buffer_pt buffer_out, primos_t primos)
+pkg_thread_sieve_processamento_pt create_pkg_thread_sieve_processamento(id_t id, buffer_pt buffer_in, buffer_pt buffer_out, int buffer_size_internal)
 {
 	pkg_thread_sieve_processamento_pt tsp = malloc(sizeof(pkg_thread_sieve_processamento_t));
 	tsp->id = id;
 	tsp->buffer_in = buffer_in;
 	tsp->buffer_out = buffer_out;
-	tsp->primos = primos;
+	tsp->primos = malloc(sizeof(bufer_primos_pt) * buffer_size_internal);
 	return tsp;
 }
 
 void* thread_sieve_processamento(void* args)
 {
+	pkg_thread_sieve_processamento_pt pkg = (pkg_thread_sieve_processamento_pt)args;
+	buffer_pt buffer_in = pkg->buffer_in;
+	buffer_pt buffer_out = pkg->buffer_out;
+	bufer_primos_pt primos = pkg->primos;
 	return NULL;
 }
 
-pkg_thread_resultado_pt create_pkg_thread_resultado(id_t id)
+pkg_thread_resultado_pt create_pkg_thread_resultado(id_t id, buffer_pt buffer_resultados)
 {
 	pkg_thread_resultado_pt ts = malloc(sizeof(pkg_thread_resultado_t));
 	ts->id = id;
-	ts->qtd_primos;
+	ts->buffer_resultados = buffer_resultados;
 	return (pkg_thread_resultado_pt)NULL;
 }
 
@@ -154,12 +187,20 @@ int main(int argc, char *argv[])
 {
 	pthread_t t_geradora, t_resultado;
 
-	int max_size_of_buffer = 10;
+	int max_size_comunication_buffer = 10;
+	int max_size_internal_buffer = 5;
+	int numero_a_serem_testados = 131313;
 
-	buffer_pt buffer_out_geradora = create_buffer(max_size_of_buffer);
+
+	buffer_pt buffer_out_geradora = create_buffer(max_size_comunication_buffer);
+
+	buffer_pt buffer_out_tsp = create_buffer(max_size_comunication_buffer);
+
+	buffer_pt buffer_resultados_numeros_primos = create_buffer(numero_a_serem_testados);
 
 	pkg_thread_geradora_pt pkg_tg = create_pkg_thread_geradora(1, buffer_out_geradora);
-	pkg_thread_resultado_pt pkg_tr = create_pkg_thread_resultado(2);
+	pkg_thread_sieve_processamento_pt pkg_tsp = create_pkg_thread_sieve_processamento(2, buffer_out_geradora, buffer_out_tsp, max_size_internal_buffer);
+	pkg_thread_resultado_pt pkg_tr = create_pkg_thread_resultado(3, buffer_resultados_numeros_primos);
 
 	pthread_create(&t_geradora, NULL, &thread_geradora, (void*) pkg_tg);
 	pthread_create(&t_resultado, NULL, &thread_resultado, (void*) pkg_tr);
