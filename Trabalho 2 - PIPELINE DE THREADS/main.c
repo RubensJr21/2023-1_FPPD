@@ -70,7 +70,7 @@ typedef struct {
 buffer_pt create_buffer(int max_size_buffer)
 {
 	int* index = malloc(sizeof(int));
-	*index = 0;
+	*index = -1;
 
 	pthread_mutex_t* mutex = malloc(sizeof(pthread_mutex_t));
 	pthread_mutex_init(mutex, NULL);
@@ -134,6 +134,7 @@ void* thread_geradora(void* args)
 		if (*(buffer->current_index) < buffer->max_size_buffer)
 		{
 			buffer->buffer[(*(buffer->current_index))++] = ntv;
+			pthread_cond_signal(buffer->cond);
 			pthread_mutex_unlock(buffer->mutex);
 		}
 		else
@@ -167,6 +168,23 @@ void* thread_sieve_processamento(void* args)
 	buffer_pt buffer_in = pkg->buffer_in;
 	buffer_pt buffer_out = pkg->buffer_out;
 	bufer_primos_pt primos = pkg->primos;
+	int index_buffer_primos = 0;
+	while (TRUE)
+	{
+		pthread_mutex_lock(buffer_in->mutex);
+		if (buffer_in->current_index == -1)
+		{
+			pthread_cond_wait(buffer_in->cond, buffer_in->mutex);
+			// processar
+		}
+		else
+		{
+			pkg_number_to_veriry_pt pkg_number = buffer_in->buffer[*(buffer_in->current_index)];
+			// atualizar index
+			*(buffer_in->current_index) = (buffer_in->max_size_buffer % *(buffer_in->current_index)) - 1;
+		}
+		pthread_mutex_unlock(buffer_in->mutex);
+	}
 	return NULL;
 }
 
