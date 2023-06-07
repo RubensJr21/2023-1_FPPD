@@ -7,6 +7,7 @@
 #include <pthread.h>
 #include <semaphore.h>
 #include <stdio.h>
+#include <Windows.h>
 #include <stdlib.h>
 
 /*
@@ -49,12 +50,15 @@ typedef struct {
 	pthread_mutex_t* mutex;
 }buffer_t, *buffer_pt;
 
-buffer_pt create_buffer(int max_size_buffer, int* current_index)
+buffer_pt create_buffer(int max_size_buffer)
 {
+	int* index_of_buffer_geradora = malloc(sizeof(int));
+	*index_of_buffer_geradora = 0;
+
 	pthread_mutex_t* mutex = malloc(sizeof(pthread_mutex_t));
 	pthread_mutex_init(mutex, NULL);
 	buffer_pt b = malloc(sizeof(buffer_t));
-	b->current_index = current_index;
+	b->current_index = index_of_buffer_geradora;
 	b->buffer = malloc(sizeof(bignumber_t) * max_size_buffer);
 	b->max_size_buffer = max_size_buffer;
 	b->mutex = mutex;
@@ -68,6 +72,11 @@ void insertInBuffer(buffer_pt buffer, bignumber_t number)
 	if (*(buffer->current_index) < buffer->max_size_buffer)
 	{
 		buffer->buffer[(*(buffer->current_index))++] = number;
+	}
+	else
+	{
+		system("pause");
+		// esperar liberar
 	}
 	pthread_mutex_unlock(buffer->mutex);
 	printf("numero recebido: %lld\n", number);
@@ -147,22 +156,25 @@ int main(int argc, char *argv[])
 
 	int max_size_of_buffer = 10;
 
-	int index_of_buffer_geradora = 0;
-
-	buffer_pt buffer_out_geradora = create_buffer(max_size_of_buffer, &index_of_buffer_geradora);
+	buffer_pt buffer_out_geradora = create_buffer(max_size_of_buffer);
 
 	pkg_thread_geradora_pt pkg_tg = create_pkg_thread_geradora(1, buffer_out_geradora);
 	pkg_thread_resultado_pt pkg_tr = create_pkg_thread_resultado(2);
 
-	pthread_create(&t_geradora, NULL, &thread_geradora, (void*) &pkg_tg);
-	pthread_create(&t_resultado, NULL, &thread_geradora, (void*) &pkg_tr);
+	pthread_create(&t_geradora, NULL, &thread_geradora, (void*) pkg_tg);
+	pthread_create(&t_resultado, NULL, &thread_resultado, (void*) pkg_tr);
+
+	pthread_join(t_geradora, NULL);
+	pthread_join(t_resultado, NULL);
 
 	/*
 		threads de processamento
 	*/
 
+	/*
 	pthread_cancel(t_geradora);
 	pthread_cancel(t_resultado);
+	*/
 
 	return 0;
 }
