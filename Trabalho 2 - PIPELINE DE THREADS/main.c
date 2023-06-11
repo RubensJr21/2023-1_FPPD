@@ -57,7 +57,7 @@
 #define FALSE 0
 #define bool_t int
 
-#define MULTIPLAS_THREADS TRUE
+#define MULTIPLAS_THREADS FALSE
 
 typedef struct {
 	bignumber_t number;
