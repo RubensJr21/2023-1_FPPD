@@ -6,11 +6,14 @@
 #pragma warning(disable:6386)
 // https://learn.microsoft.com/pt-br/cpp/code-quality/c6386?view=msvc-170
 
+#define PDC_DLL_BUILD
+
 #include <pthread.h>
 #include <stdio.h>
 #include <Windows.h>
 #include <stdlib.h>
-#include<math.h>
+#include <math.h>
+#include <semaphore.h>
 
 /*
 	seu código deve ter NO MÍNIMO, uma thread geradora de pacotes de 'N' números a serem detectados
@@ -41,6 +44,13 @@
 	
 */
 
+/*
+	Níveis:
+		0 => TUDO
+		1 => Apenas Sinais e conds
+*/
+
+#define NIVEL_DEBUG 1
 
 // https://medium.com/@selvarajk/adding-color-to-your-output-from-c-58f1a4dc4e75
 
@@ -60,6 +70,15 @@
 #define bool_t int
 
 #define MULTIPLAS_THREADS TRUE
+
+void printf_(const char *string)
+{
+	// Escreve no console da primeira thread
+	//const char* texto = "Texto da Thread 1\n";
+	printf(string);
+	//DWORD bytesEscritos;
+	//WriteConsoleA(string, strlen(string), &bytesEscritos, NULL);
+}
 
 typedef struct {
 	bignumber_t number;
@@ -90,21 +109,39 @@ typedef struct {
 
 void insert_in_buffer_resultados(buffer_resultados_pt buffer_resultados, pkg_number_to_veriry_pt number_to_verify, int id)
 {
-	printf("insert_in_buffer_resultados::THREAD #%d VAI LOCKAR %p\n", id, buffer_resultados->mutex);
+	if (NIVEL_DEBUG == 0)
+	{
+		printf("insert_in_buffer_resultados::THREAD #%d VAI LOCKAR %p\n", id, buffer_resultados->mutex);
+	}
 	pthread_mutex_lock(buffer_resultados->mutex);
-	printf("insert_in_buffer_resultados::THREAD #%d LOCKOU %p\n", id, buffer_resultados->mutex);
+	if (NIVEL_DEBUG == 0)
+	{
+		printf("insert_in_buffer_resultados::THREAD #%d LOCKOU %p\n", id, buffer_resultados->mutex);
+	}
 	// envia o número para a primeira thread de processamento
 	buffer_resultados->buffer[buffer_resultados->current_index++] = number_to_verify;
-	printf("insert_in_buffer_resultados::THREAD #%d VAI DESLOCKAR %p\n", id, buffer_resultados->mutex);
+	if (NIVEL_DEBUG == 0)
+	{
+		printf("insert_in_buffer_resultados::THREAD #%d VAI DESLOCKAR %p\n", id, buffer_resultados->mutex);
+	}
 	pthread_mutex_unlock(buffer_resultados->mutex);
-	printf("insert_in_buffer_resultados::THREAD #%d DESLOCKOU %p\n", id, buffer_resultados->mutex);
+	if (NIVEL_DEBUG == 0)
+	{
+		printf("insert_in_buffer_resultados::THREAD #%d DESLOCKOU %p\n", id, buffer_resultados->mutex);
+	}
 }
 
 primo_t get_number_from_buffer_resultados(buffer_resultados_pt buffer_resultados, int id)
 {
-	printf("get_number_from_buffer_resultados::THREAD #%d VAI LOCKAR %p\n", id, buffer_resultados->mutex);
+	if (NIVEL_DEBUG == 0)
+	{
+		printf("get_number_from_buffer_resultados::THREAD #%d VAI LOCKAR %p\n", id, buffer_resultados->mutex);
+	}
 	pthread_mutex_lock(buffer_resultados->mutex);
-	printf("get_number_from_buffer_resultados::THREAD #%d LOCKOU %p\n", id, buffer_resultados->mutex);
+	if (NIVEL_DEBUG == 0)
+	{
+		printf("get_number_from_buffer_resultados::THREAD #%d LOCKOU %p\n", id, buffer_resultados->mutex);
+	}
 	pkg_number_to_veriry_pt number_to_verify = buffer_resultados->buffer[buffer_resultados->current_index];
 	while (number_to_verify == NULL)
 	{
@@ -114,9 +151,15 @@ primo_t get_number_from_buffer_resultados(buffer_resultados_pt buffer_resultados
 		number_to_verify = buffer_resultados->buffer[buffer_resultados->current_index];
 	}
 	buffer_resultados->current_index++;
-	printf("get_number_from_buffer_resultados::THREAD #%d VAI DESLOCKAR %p\n", id, buffer_resultados->mutex);
+	if (NIVEL_DEBUG == 0)
+	{
+		printf("get_number_from_buffer_resultados::THREAD #%d VAI DESLOCKAR %p\n", id, buffer_resultados->mutex);
+	}
 	pthread_mutex_unlock(buffer_resultados->mutex);
-	printf("get_number_from_buffer_resultados::THREAD #%d VAI DESLOCKOU %p\n", id, buffer_resultados->mutex);
+	if (NIVEL_DEBUG == 0)
+	{
+		printf("get_number_from_buffer_resultados::THREAD #%d VAI DESLOCKOU %p\n", id, buffer_resultados->mutex);
+	}
 	return number_to_verify->number;
 }
 
@@ -148,35 +191,60 @@ typedef struct {
 	pkg_number_to_veriry_pt* buffer;
 	int max_size_buffer; // usado para calcular o round do number_to_verify
 	pthread_mutex_t* mutex;
-}buffer_de_primos_t, *buffer_de_primos_pt;
+}buffer_de_primos_t, * buffer_de_primos_pt;
 
 void insert_in_buffer_internal_primos(buffer_de_primos_pt buffer_primos, pkg_number_to_veriry_pt number_to_verify, int id)
 {
-	printf("insert_in_buffer_internal_primos::THREAD #%d VAI LOCKAR %p\n", id, buffer_primos->mutex);
+	if (NIVEL_DEBUG == 0)
+	{
+		printf("insert_in_buffer_internal_primos::THREAD #%d VAI LOCKAR %p\n", id, buffer_primos->mutex);
+	}
 	pthread_mutex_lock(buffer_primos->mutex);
-	printf("insert_in_buffer_internal_primos::THREAD #%d LOCKOU %p\n", id, buffer_primos->mutex);
+	if (NIVEL_DEBUG == 0)
+	{
+		printf("insert_in_buffer_internal_primos::THREAD #%d LOCKOU %p\n", id, buffer_primos->mutex);
+	}
 	// envia o número para a primeira thread de processamento
 	buffer_primos->buffer[number_to_verify->round] = number_to_verify;
-	printf("insert_in_buffer_internal_primos::THREAD #%d DESLOCKAR %p\n", id, buffer_primos->mutex);
+	if (NIVEL_DEBUG == 0)
+	{
+		printf("insert_in_buffer_internal_primos::THREAD #%d DESLOCKAR %p\n", id, buffer_primos->mutex);
+	}
 	pthread_mutex_unlock(buffer_primos->mutex);
-	printf("insert_in_buffer_internal_primos::THREAD #%d DESLOCKOU %p\n", id, buffer_primos->mutex);
+	if (NIVEL_DEBUG == 0)
+	{
+		printf("insert_in_buffer_internal_primos::THREAD #%d DESLOCKOU %p\n", id, buffer_primos->mutex);
+	}
 }
 
 primo_t get_number_from_buffer_internal_primos(buffer_de_primos_pt buffer_primos, int index, int id)
 {
-	printf("get_number_from_buffer_internal_primos::THREAD #%d VAI LOCKAR %p\n", id, buffer_primos->mutex);
+	if (NIVEL_DEBUG == 0)
+	{
+		printf("get_number_from_buffer_internal_primos::THREAD #%d VAI LOCKAR %p\n", id, buffer_primos->mutex);
+	}
 	pthread_mutex_lock(buffer_primos->mutex);
-	printf("get_number_from_buffer_internal_primos::THREAD #%d LOCKOU %p\n", id, buffer_primos->mutex);
+	if (NIVEL_DEBUG == 0)
+	{
+		printf("get_number_from_buffer_internal_primos::THREAD #%d LOCKOU %p\n", id, buffer_primos->mutex);
+	}
 	// Caso -1
 	if (index >= buffer_primos->max_size_buffer) // quer dizer que o espaço no buffer acabou, sendo assim encerrando o processo
 	{
 		return -2;
 	}
-	printf("get_number_from_buffer_internal_primos::buffer_primos->buffer => %p\n", buffer_primos->buffer);
+	//printf("get_number_from_buffer_internal_primos::buffer_primos->buffer => %p\n", buffer_primos->buffer);
+
 	pkg_number_to_veriry_pt number_to_verify = buffer_primos->buffer[index];
-	printf("get_number_from_buffer_internal_primos::THREAD #%d VAI DESLOCKAR %p\n", id, buffer_primos->mutex);
+	if (NIVEL_DEBUG == 0)
+	{
+		printf("get_number_from_buffer_internal_primos::THREAD #%d VAI DESLOCKAR %p\n", id, buffer_primos->mutex);
+	}
 	pthread_mutex_unlock(buffer_primos->mutex);
-	printf("get_number_from_buffer_internal_primos::THREAD #%d DESLOCKOU %p\n", id, buffer_primos->mutex);
+	if (NIVEL_DEBUG == 0)
+	{
+		printf("get_number_from_buffer_internal_primos::THREAD #%d DESLOCKOU %p\n", id, buffer_primos->mutex);
+	}
 	if (number_to_verify == NULL)
 	{
 		return -1;
@@ -210,15 +278,21 @@ typedef struct {
 	int max_size_buffer;
 	pthread_mutex_t* mutex;
 	pthread_cond_t* cond;
-}buffer_IO_t, *buffer_IO_pt;
+	sem_t* sem;
+}buffer_IO_t, * buffer_IO_pt;
 
 void insert_in_buffer_IO(buffer_IO_pt buffer, pkg_number_to_veriry_pt number_to_verify, int id)
 {
-	printf("insert_in_buffer_IO::THREAD #%d VAI LOCKAR\n", id);
+	if (NIVEL_DEBUG == 0)
+	{
+		printf("insert_in_buffer_IO::THREAD #%d VAI LOCKAR\n", id);
+	}
 	bool_t position_free = FALSE;
-	printf("buffer->mutex => %p\n", buffer->mutex);
 	pthread_mutex_lock(buffer->mutex);
-	printf("insert_in_buffer_IO::THREAD #%d LOCKOU\n", id);
+	if (NIVEL_DEBUG == 0)
+	{
+		printf("insert_in_buffer_IO::THREAD #%d LOCKOU\n", id);
+	}
 	// envia o número para a primeira thread de processamento
 	pkg_number_to_veriry_pt pos_verify = buffer->buffer[buffer->current_index_writing];
 	position_free = pos_verify == NULL;
@@ -236,25 +310,67 @@ void insert_in_buffer_IO(buffer_IO_pt buffer, pkg_number_to_veriry_pt number_to_
 	}
 	else
 	{
+		char buffer_string[5000];
+		int i;
+		int escreveu_ate = sprintf_s(buffer_string, 5000, "*** BUFFER da THREAD #%d ***\n", id);
+		int qtd_chars = 10 * 2;
+		int tamanho_total = escreveu_ate + qtd_chars;
+		for (i = 0; i < 10-1; i++)
+		{
+			if (buffer->buffer[i] != NULL)
+			{
+				escreveu_ate += sprintf_s(buffer_string + escreveu_ate, 5000 - escreveu_ate, "%d,", buffer->buffer[i]->number);
+			}
+			else
+			{
+				escreveu_ate += sprintf_s(buffer_string + escreveu_ate, 5000 - escreveu_ate, "N,");
+			}
+		}
+		if (buffer->buffer[i])
+		{
+			escreveu_ate += sprintf_s(buffer_string + escreveu_ate, 5000 - escreveu_ate, "%d.\n", buffer->buffer[i]->number);
+		}
+		else
+		{
+			escreveu_ate += sprintf_s(buffer_string + escreveu_ate, 5000 - escreveu_ate, "N.\n");
+		}
+
+		printf(buffer_string);
+
 		// esperar liberar
 		// usar cond
 		printf("insert_in_buffer_IO::THREAD #%d VAI ESPERAR UM SINAL\n", id);
+		// verificar a necessidade de colocar um semaforo de uma posição aqui
 		pthread_cond_wait(buffer->cond, buffer->mutex);
 		printf("insert_in_buffer_IO::THREAD #%d RECEBEU SINAL\n", id);
 		buffer->buffer[buffer->current_index_writing++] = number_to_verify;
 		// buffer_circular
 		buffer->current_index_writing = (buffer->current_index_writing % buffer->max_size_buffer);
+		//printf("insert_in_buffer_IO::buffer->current_index_writing => %d\n", buffer->current_index_writing);
 	}
-	printf("insert_in_buffer_IO::THREAD #%d VAI DESLOCKAR\n", id);
+	if (NIVEL_DEBUG == 0)
+	{
+		printf("insert_in_buffer_IO::THREAD #%d VAI DESLOCKAR\n", id);
+	}
 	pthread_mutex_unlock(buffer->mutex);
-	printf("insert_in_buffer_IO::THREAD #%d DESLOCKOU\n", id);
+	if (NIVEL_DEBUG == 0)
+	{
+		printf("insert_in_buffer_IO::THREAD #%d DESLOCKOU\n", id);
+	}
 }
 
 pkg_number_to_veriry_pt get_number_from_buffer_IO(buffer_IO_pt buffer, int id)
 {
-	printf("get_number_from_buffer_IO::THREAD #%d VAI LOCKAR %p\n", id, buffer->mutex);
+
+	if (NIVEL_DEBUG == 0)
+	{
+		printf("get_number_from_buffer_IO::THREAD #%d VAI LOCKAR %p\n", id, buffer->mutex);
+	}
 	pthread_mutex_lock(buffer->mutex);
-	printf("get_number_from_buffer_IO::THREAD #%d LOCKOU %p\n", id, buffer->mutex);
+	if (NIVEL_DEBUG == 0)
+	{
+		printf("get_number_from_buffer_IO::THREAD #%d LOCKOU %p\n", id, buffer->mutex);
+	}
 	pkg_number_to_veriry_pt number = buffer->buffer[buffer->current_index_reading];
 	// buffer_circular
 	if (number == NULL)
@@ -269,11 +385,16 @@ pkg_number_to_veriry_pt get_number_from_buffer_IO(buffer_IO_pt buffer, int id)
 	buffer->buffer[buffer->current_index_reading++] = NULL;
 	// atualizar index
 	buffer->current_index_reading = (buffer->current_index_reading % buffer->max_size_buffer);
-	printf("get_number_from_buffer_IO::index_incrementado: %d, new_index: %d\n", old_index, buffer->current_index_reading);
-	printf("get_number_from_buffer_IO::THREAD #%d VAI DESLOCKAR %p\n", id, buffer->mutex);
+	if (NIVEL_DEBUG == 0)
+	{
+		printf("get_number_from_buffer_IO::THREAD #%d VAI DESLOCKAR %p\n", id, buffer->mutex);
+	}
 	pthread_cond_signal(buffer->cond);
 	pthread_mutex_unlock(buffer->mutex);
-	printf("get_number_from_buffer_IO::THREAD #%d DESLOCKOU %p\n", id, buffer->mutex);
+	if (NIVEL_DEBUG == 0)
+	{
+		printf("get_number_from_buffer_IO::THREAD #%d DESLOCKOU %p\n", id, buffer->mutex);
+	}
 	return number;
 }
 
@@ -283,13 +404,8 @@ buffer_IO_pt create_buffer_IO(int max_size_buffer)
 	pthread_mutex_init(mutex, NULL);
 	pthread_cond_t* cond = malloc(sizeof(pthread_cond_t));
 	pthread_cond_init(cond, NULL);
-	
-	/*
-	printf("create_buffer_IO::mutex => %p\n", mutex);
-	pthread_mutex_lock(mutex);
-
-	pthread_mutex_unlock(mutex);
-	*/
+	sem_t* sem = malloc(sizeof(sem_t));
+	sem_init(sem, 0, max_size_buffer);
 
 	buffer_IO_pt b = malloc(sizeof(buffer_IO_t));
 	b->current_index_writing = 0;
@@ -302,6 +418,7 @@ buffer_IO_pt create_buffer_IO(int max_size_buffer)
 	b->max_size_buffer = max_size_buffer;
 	b->mutex = mutex;
 	b->cond = cond;
+	b->sem = sem;
 	return b;
 }
 
@@ -310,7 +427,7 @@ typedef struct {
 	int numeros_a_serem_gerados;
 	buffer_IO_pt buffer_out;
 	int qtd_de_threads;
-}pkg_thread_geradora_t, *pkg_thread_geradora_pt;
+}pkg_thread_geradora_t, * pkg_thread_geradora_pt;
 
 pkg_thread_geradora_pt create_pkg_thread_geradora(id_t id, int size_buffer, int qtd_threads, int numeros_a_serem_gerados)
 {
@@ -325,6 +442,7 @@ pkg_thread_geradora_pt create_pkg_thread_geradora(id_t id, int size_buffer, int 
 
 void* thread_geradora(void* args)
 {
+
 	pkg_thread_geradora_pt pkg = (pkg_thread_geradora_pt)args;
 	buffer_IO_pt buffer = pkg->buffer_out;
 	int qtd_de_threads = pkg->qtd_de_threads;
@@ -335,10 +453,14 @@ void* thread_geradora(void* args)
 	while (numeros_gerados < pkg->numeros_a_serem_gerados)
 	{
 		ntv = create_pkg_number_to_veriry(number, qtd_de_threads);
-		printf("numero gerado: %d\n", number);
+		if (NIVEL_DEBUG == 0)
+		{
+			printf("numero gerado: %d\n", number);
+
+		}
 
 		/*
-		printf("thread_geradora::mutex => %p\n", buffer->mutex);
+		printf(thread_geradora::mutex => %p\n", buffer->mutex);
 
 		pthread_mutex_lock(buffer->mutex);
 
@@ -371,7 +493,10 @@ pkg_thread_sieve_processamento_pt create_pkg_thread_sieve_processamento(id_t id,
 
 void update_round(pkg_number_to_veriry_pt number_to_verify)
 {
-	printf("ATUALIZA ROUND do number: %d\n", number_to_verify->number);
+	if (NIVEL_DEBUG == 0)
+	{
+		printf("ATUALIZA ROUND do number: %d\n", number_to_verify->number);
+	}
 	// incrementa number_to_verify->contador
 	number_to_verify->contador++;
 	// atualiza o number_to_verify->round
@@ -418,6 +543,7 @@ bool_t process_number(id_t processing_thread, buffer_IO_pt buffer_out, buffer_de
 		else
 		{
 			printf(ANSI_COLOR_RED "numero %d foi verificado como NAO PRIMO na Thread #%d e ROUND #%d\n" ANSI_COLOR_RESET, number_to_verify->number, processing_thread, number_to_verify->round);
+
 		}
 	}
 	return TRUE;
@@ -426,6 +552,7 @@ bool_t process_number(id_t processing_thread, buffer_IO_pt buffer_out, buffer_de
 void* thread_sieve_processamento(void* args)
 {
 	pkg_thread_sieve_processamento_pt pkg = (pkg_thread_sieve_processamento_pt)args;
+
 	buffer_IO_pt buffer_in = pkg->buffer_in;
 	buffer_IO_pt buffer_out = pkg->buffer_out;
 	buffer_de_primos_pt buffer_primos = create_buffer_internal_primos(pkg->size_buffer_internal);
@@ -443,16 +570,9 @@ void* thread_sieve_processamento(void* args)
 			2. Não ser primo
 				2.1: Descartar o número, pegando o próximo do buffer
 		*/
-		//printf("THREAD ??20 VAI LOCKAR %p\n", buffer_in->mutex);
-		//pthread_mutex_lock(buffer_in->mutex);
 		// obtém número que será verificado
 		ntv = get_number_from_buffer_IO(buffer_in, pkg->id); // função assincrona
 		// processar()
-		if (ntv == NULL)
-		{
-			int f = 4;
-			printf("*** ntv == NULL ***\n");
-		}
 		continuar_processamento = process_number(pkg->id, buffer_out, buffer_primos, ntv);
 	}
 	return NULL;
@@ -498,7 +618,7 @@ int main(int argc, char *argv[])
 	// K
 	int max_size_comunication_buffer = 10;
 	// X
-	int max_size_internal_buffer = 5000;
+	int max_size_internal_buffer = 50;
 	
 	pkg_thread_geradora_pt pkg_tg = create_pkg_thread_geradora(0, max_size_comunication_buffer, qtd_de_threads_de_processamento, numero_a_serem_testados);
 	buffer_IO_pt buffer_out_geradora = pkg_tg->buffer_out;
@@ -519,24 +639,21 @@ int main(int argc, char *argv[])
 
 		id_t id;
 
-		int total_threads = qtd_de_threads_de_processamento + 2;
-
-		for (id = 2; id <= total_threads - 2; id++) // id <= total_threads - 2 para parar na última e ser criada manualmente
+		for (id = 0; id < qtd_de_threads_de_processamento - 1; id++) // id <= total_threads - 2 para parar na última e ser criada manualmente
 		{
-			pkgs_tsp[id] = create_pkg_thread_sieve_processamento(id, buffer_in_tsp, buffer_out_tsp, max_size_internal_buffer, buffer_resultados_numeros_primos);
+			pkgs_tsp[id] = create_pkg_thread_sieve_processamento(id+2, buffer_in_tsp, buffer_out_tsp, max_size_internal_buffer, buffer_resultados_numeros_primos);
 			buffer_in_tsp = buffer_out_tsp;
 			buffer_out_tsp = create_buffer_IO(max_size_comunication_buffer);
 		}
 		
-		id = total_threads - 1;
 		buffer_out_tsp = buffer_out_geradora;
-		pkgs_tsp[id] = create_pkg_thread_sieve_processamento(id, buffer_in_tsp, buffer_out_tsp, max_size_internal_buffer, buffer_resultados_numeros_primos);
+		pkgs_tsp[id] = create_pkg_thread_sieve_processamento(id + 2, buffer_in_tsp, buffer_out_tsp, max_size_internal_buffer, buffer_resultados_numeros_primos);
 
-		for (id = 2; id <= total_threads - 1; id++)
+		for (id = 0; id < qtd_de_threads_de_processamento; id++)
 		{
 			pthread_create(&ts_sieves_processamento[id], NULL, &thread_sieve_processamento, (void*)pkgs_tsp[id]);
 		}
-		for (id = 2; id <= total_threads - 1; id++)
+		for (id = 0; id < qtd_de_threads_de_processamento; id++)
 		{
 			pthread_join(ts_sieves_processamento[id], NULL);
 		}
