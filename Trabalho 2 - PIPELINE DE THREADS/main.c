@@ -389,6 +389,7 @@ pkg_number_to_veriry_pt get_number_from_buffer_IO(buffer_IO_pt buffer, int id)
 	{
 		printf("get_number_from_buffer_IO::THREAD #%d VAI DESLOCKAR %p\n", id, buffer->mutex);
 	}
+	// ver a possibilidade de semaforo aqui
 	pthread_cond_signal(buffer->cond);
 	pthread_mutex_unlock(buffer->mutex);
 	if (NIVEL_DEBUG == 0)
