@@ -157,26 +157,26 @@ void insert_in_buffer_internal_primos(buffer_de_primos_pt buffer_primos, pkg_num
 	char line[1000];
 	if (NIVEL_DEBUG == 0)
 	{
-		sprintf_s(line, sizeof(line), "insert_in_buffer_internal_primos::THREAD #%d VAI LOCKAR %p", id, buffer_primos->mutex);
+		sprintf_s(line, sizeof(line), "insert_in_buffer_internal_primos::THREAD #%d VAI LOCKAR %p\n", id, buffer_primos->mutex);
 		printf_(text_hwnd, line);
 	}
 	pthread_mutex_lock(buffer_primos->mutex);
 	if (NIVEL_DEBUG == 0)
 	{
-		sprintf_s(line, sizeof(line), "insert_in_buffer_internal_primos::THREAD #%d LOCKOU %p", id, buffer_primos->mutex);
+		sprintf_s(line, sizeof(line), "insert_in_buffer_internal_primos::THREAD #%d LOCKOU %p\n", id, buffer_primos->mutex);
 		printf_(text_hwnd, line);
 	}
 	// envia o número para a primeira thread de processamento
 	buffer_primos->buffer[number_to_verify->round] = number_to_verify;
 	if (NIVEL_DEBUG == 0)
 	{
-		sprintf_s(line, sizeof(line), "insert_in_buffer_internal_primos::THREAD #%d VAI DESLOCKAR %p", id, buffer_primos->mutex);
+		sprintf_s(line, sizeof(line), "insert_in_buffer_internal_primos::THREAD #%d VAI DESLOCKAR %p\n", id, buffer_primos->mutex);
 		printf_(text_hwnd, line);
 	}
 	pthread_mutex_unlock(buffer_primos->mutex);
 	if (NIVEL_DEBUG == 0)
 	{
-		sprintf_s(line, sizeof(line), "insert_in_buffer_internal_primos::THREAD #%d DESLOCKOU %p", id, buffer_primos->mutex);
+		sprintf_s(line, sizeof(line), "insert_in_buffer_internal_primos::THREAD #%d DESLOCKOU %p\n", id, buffer_primos->mutex);
 		printf_(text_hwnd, line);
 	}
 }
@@ -186,13 +186,13 @@ primo_t get_number_from_buffer_internal_primos(buffer_de_primos_pt buffer_primos
 	char line[1000];
 	if (NIVEL_DEBUG == 0)
 	{
-		sprintf_s(line, sizeof(line), "get_number_from_buffer_internal_primos::THREAD #%d VAI LOCKAR %p", id, buffer_primos->mutex);
+		sprintf_s(line, sizeof(line), "get_number_from_buffer_internal_primos::THREAD #%d VAI LOCKAR %p\n", id, buffer_primos->mutex);
 		printf_(text_hwnd, line);
 	}
 	pthread_mutex_lock(buffer_primos->mutex);
 	if (NIVEL_DEBUG == 0)
 	{
-		sprintf_s(line, sizeof(line), "get_number_from_buffer_internal_primos::THREAD #%d VAI LOCKAR %p", id, buffer_primos->mutex);
+		sprintf_s(line, sizeof(line), "get_number_from_buffer_internal_primos::THREAD #%d VAI LOCKAR %p\n", id, buffer_primos->mutex);
 		printf_(text_hwnd, line);
 	}
 	// Caso -1
@@ -200,18 +200,18 @@ primo_t get_number_from_buffer_internal_primos(buffer_de_primos_pt buffer_primos
 	{
 		return -2;
 	}
-	//printf_(text_hwnd, "get_number_from_buffer_internal_primos::buffer_primos->buffer => %p", buffer_primos->buffer);
+	//printf_(text_hwnd, "get_number_from_buffer_internal_primos::buffer_primos->buffer => %p\n", buffer_primos->buffer);
 
 	pkg_number_to_veriry_pt number_to_verify = buffer_primos->buffer[index];
 	if (NIVEL_DEBUG == 0)
 	{
-		sprintf_s(line, sizeof(line), "get_number_from_buffer_internal_primos::THREAD #%d VAI DELOCKAR %p", id, buffer_primos->mutex);
+		sprintf_s(line, sizeof(line), "get_number_from_buffer_internal_primos::THREAD #%d VAI DELOCKAR %p\n", id, buffer_primos->mutex);
 		printf_(text_hwnd, line);
 	}
 	pthread_mutex_unlock(buffer_primos->mutex);
 	if (NIVEL_DEBUG == 0)
 	{
-		sprintf_s(line, sizeof(line), "get_number_from_buffer_internal_primos::THREAD #%d DESLOCKOU %p", id, buffer_primos->mutex);
+		sprintf_s(line, sizeof(line), "get_number_from_buffer_internal_primos::THREAD #%d DESLOCKOU %p\n", id, buffer_primos->mutex);
 		printf_(text_hwnd, line);
 	}
 	if (number_to_verify == NULL)
@@ -255,14 +255,14 @@ void insert_in_buffer_IO(buffer_IO_pt buffer, pkg_number_to_veriry_pt number_to_
 	char line[1000];
 	if (NIVEL_DEBUG == 0)
 	{
-		sprintf_s(line, sizeof(line), "insert_in_buffer_IO::THREAD #%d VAI LOCKAR", id);
+		sprintf_s(line, sizeof(line), "insert_in_buffer_IO::THREAD #%d VAI LOCKAR\n", id);
 		printf_(text_hwnd, line);
 	}
 	bool_t position_free = FALSE;
 	pthread_mutex_lock(buffer->mutex);
 	if (NIVEL_DEBUG == 0)
 	{
-		sprintf_s(line, sizeof(line), "insert_in_buffer_IO::THREAD #%d LOCKOU", id);
+		sprintf_s(line, sizeof(line), "insert_in_buffer_IO::THREAD #%d LOCKOU\n", id);
 		printf_(text_hwnd, line);
 	}
 	// envia o número para a primeira thread de processamento
@@ -276,17 +276,28 @@ void insert_in_buffer_IO(buffer_IO_pt buffer, pkg_number_to_veriry_pt number_to_
 		buffer->buffer[buffer->current_index_writing++] = number_to_verify;
 		// buffer_circular
 		buffer->current_index_writing = (buffer->current_index_writing % buffer->max_size_buffer);
-		sprintf_s(line, sizeof(line), "insert_in_buffer_IO::THREAD #%d VAI ENVIAR UM SINAL", id);
+		if (NIVEL_DEBUG == 0)
+		{
+			sprintf_s(line, sizeof(line), "insert_in_buffer_IO::THREAD #%d VAI DESLOCKAR\n", id);
+			printf_(text_hwnd, line);
+		}
+		pthread_mutex_unlock(buffer->mutex);
+		if (NIVEL_DEBUG == 0)
+		{
+			sprintf_s(line, sizeof(line), "insert_in_buffer_IO::THREAD #%d DESLOCKOU\n", id);
+			printf_(text_hwnd, line);
+		}
+		sprintf_s(line, sizeof(line), "insert_in_buffer_IO::THREAD #%d VAI ENVIAR UM SINAL\n", id);
 		printf_(text_hwnd, line);
 		pthread_cond_signal(buffer->cond);
-		sprintf_s(line, sizeof(line), "insert_in_buffer_IO::THREAD #%d ENVIOU UM SINAL", id);
+		sprintf_s(line, sizeof(line), "insert_in_buffer_IO::THREAD #%d ENVIOU UM SINAL\n", id);
 		printf_(text_hwnd, line);
 	}
 	else
 	{
 		char buffer_string[5000];
 		int i;
-		int escreveu_ate = sprintf_s(buffer_string, 5000, "insert_in_buffer_IO::BUFFER: ");
+		int escreveu_ate = sprintf_s(buffer_string, 5000, "insert_in_buffer_IO::BUFFER (pos atual: %d): ", buffer->current_index_writing);
 		int qtd_chars = 10 * 2;
 		int tamanho_total = escreveu_ate + qtd_chars;
 		for (i = 0; i < 10 - 1; i++)
@@ -302,11 +313,11 @@ void insert_in_buffer_IO(buffer_IO_pt buffer, pkg_number_to_veriry_pt number_to_
 		}
 		if (buffer->buffer[i])
 		{
-			escreveu_ate += sprintf_s(buffer_string + escreveu_ate, 5000 - escreveu_ate, "%d.", buffer->buffer[i]->number);
+			escreveu_ate += sprintf_s(buffer_string + escreveu_ate, 5000 - escreveu_ate, "%d.\n", buffer->buffer[i]->number);
 		}
 		else
 		{
-			escreveu_ate += sprintf_s(buffer_string + escreveu_ate, 5000 - escreveu_ate, "N.");
+			escreveu_ate += sprintf_s(buffer_string + escreveu_ate, 5000 - escreveu_ate, "N.\n");
 		}
 
 		printf_(text_hwnd, buffer_string);
@@ -314,28 +325,27 @@ void insert_in_buffer_IO(buffer_IO_pt buffer, pkg_number_to_veriry_pt number_to_
 
 		// esperar liberar
 		// usar cond
-		sprintf_s(line, sizeof(line), "insert_in_buffer_IO::THREAD #%d VAI ESPERAR UM SINAL", id);
+		sprintf_s(line, sizeof(line), "insert_in_buffer_IO::THREAD #%d VAI ESPERAR UM SINAL\n", id);
 		printf_(text_hwnd, line);
-
 		// verificar a necessidade de colocar um semaforo de uma posição aqui
 		pthread_cond_wait(buffer->cond, buffer->mutex);
-		sprintf_s(line, sizeof(line), "insert_in_buffer_IO::THREAD #%d RECEBEU SINAL", id);
+		sprintf_s(line, sizeof(line), "insert_in_buffer_IO::THREAD #%d RECEBEU SINAL\n", id);
 		printf_(text_hwnd, line);
 		buffer->buffer[buffer->current_index_writing++] = number_to_verify;
 		// buffer_circular
 		buffer->current_index_writing = (buffer->current_index_writing % buffer->max_size_buffer);
 		//printf_(text_hwnd, "insert_in_buffer_IO::buffer->current_index_writing => %d", buffer->current_index_writing);
-	}
-	if (NIVEL_DEBUG == 0)
-	{
-		sprintf_s(line, sizeof(line), "insert_in_buffer_IO::THREAD #%d VAI DESLOCKAR", id);
-		printf_(text_hwnd, line);
-	}
-	pthread_mutex_unlock(buffer->mutex);
-	if (NIVEL_DEBUG == 0)
-	{
-		sprintf_s(line, sizeof(line), "insert_in_buffer_IO::THREAD #%d DESLOCKOU", id);
-		printf_(text_hwnd, line);
+		if (NIVEL_DEBUG == 0)
+		{
+			sprintf_s(line, sizeof(line), "insert_in_buffer_IO::THREAD #%d VAI DESLOCKAR\n", id);
+			printf_(text_hwnd, line);
+		}
+		pthread_mutex_unlock(buffer->mutex);
+		if (NIVEL_DEBUG == 0)
+		{
+			sprintf_s(line, sizeof(line), "insert_in_buffer_IO::THREAD #%d DESLOCKOU\n", id);
+			printf_(text_hwnd, line);
+		}
 	}
 }
 
@@ -344,23 +354,23 @@ pkg_number_to_veriry_pt get_number_from_buffer_IO(buffer_IO_pt buffer, int id, H
 	char line[1000];
 	if (NIVEL_DEBUG == 0)
 	{
-		sprintf_s(line, sizeof(line), "get_number_from_buffer_IO::THREAD #%d VAI LOCKAR %p", id, buffer->mutex);
+		sprintf_s(line, sizeof(line), "get_number_from_buffer_IO::THREAD #%d VAI LOCKAR %p\n", id, buffer->mutex);
 		printf_(text_hwnd, line);
 	}
 	pthread_mutex_lock(buffer->mutex);
 	if (NIVEL_DEBUG == 0)
 	{
-		sprintf_s(line, sizeof(line), "get_number_from_buffer_IO::THREAD #%d LOCKOU %p", id, buffer->mutex);
+		sprintf_s(line, sizeof(line), "get_number_from_buffer_IO::THREAD #%d LOCKOU %p\n", id, buffer->mutex);
 		printf_(text_hwnd, line);
 	}
 	pkg_number_to_veriry_pt number = buffer->buffer[buffer->current_index_reading];
 	// buffer_circular
-	if (number == NULL)
+	if (number == NULL) // significa que a posição está vazia, deve esperar que a posição receba alguém
 	{
-		sprintf_s(line, sizeof(line), "get_number_from_buffer_IO::THREAD #%d VAI ESPERAR UM SINAL", id);
+		sprintf_s(line, sizeof(line), "get_number_from_buffer_IO::THREAD #%d VAI ESPERAR UM SINAL\n", id);
 		printf_(text_hwnd, line);
 		pthread_cond_wait(buffer->cond, buffer->mutex);
-		sprintf_s(line, sizeof(line), "get_number_from_buffer_IO::THREAD #%d RECEBEU SINAL", id);
+		sprintf_s(line, sizeof(line), "get_number_from_buffer_IO::THREAD #%d RECEBEU SINAL\n", id);
 		printf_(text_hwnd, line);
 		number = buffer->buffer[buffer->current_index_reading];
 	}
@@ -371,21 +381,21 @@ pkg_number_to_veriry_pt get_number_from_buffer_IO(buffer_IO_pt buffer, int id, H
 	buffer->current_index_reading = (buffer->current_index_reading % buffer->max_size_buffer);
 	if (NIVEL_DEBUG == 0)
 	{
-		sprintf_s(line, sizeof(line), "get_number_from_buffer_IO::THREAD #%d VAI DESLOCKAR %p", id, buffer->mutex);
+		sprintf_s(line, sizeof(line), "get_number_from_buffer_IO::THREAD #%d VAI DESLOCKAR %p\n", id, buffer->mutex);
 		printf_(text_hwnd, line);
 	}
-	// ver possibilidade de semaforo aqui
-	sprintf_s(line, sizeof(line), "get_number_from_buffer_IO::THREAD #%d VAI ENVIAR UM SINAL", id);
-	printf_(text_hwnd, line);
-	pthread_cond_signal(buffer->cond);
-	sprintf_s(line, sizeof(line), "get_number_from_buffer_IO::THREAD #%d ENVIOU SINAL", id);
-	printf_(text_hwnd, line);
-	pthread_mutex_unlock(buffer->mutex);
 	if (NIVEL_DEBUG == 0)
 	{
-		sprintf_s(line, sizeof(line), "get_number_from_buffer_IO::THREAD #%d DESLOCKOU %p", id, buffer->mutex);
+		sprintf_s(line, sizeof(line), "get_number_from_buffer_IO::THREAD #%d DESLOCKOU %p\n", id, buffer->mutex);
 		printf_(text_hwnd, line);
 	}
+	pthread_mutex_unlock(buffer->mutex);
+	// ver possibilidade de semaforo aqui
+	sprintf_s(line, sizeof(line), "get_number_from_buffer_IO::THREAD #%d VAI ENVIAR UM SINAL\n", id);
+	printf_(text_hwnd, line);
+	pthread_cond_signal(buffer->cond);
+	sprintf_s(line, sizeof(line), "get_number_from_buffer_IO::THREAD #%d ENVIOU SINAL\n", id);
+	printf_(text_hwnd, line);
 	return number;
 }
 
@@ -450,7 +460,7 @@ void* thread_geradora(void* args)
 		ntv = create_pkg_number_to_veriry(number, qtd_de_threads);
 		if (NIVEL_DEBUG == 0)
 		{
-			sprintf_s(line, sizeof(line), "numero gerado: %d", number);
+			sprintf_s(line, sizeof(line), "numero gerado: %d\n", number);
 			printf_(pkg->text_hwnd, line);
 
 		}
@@ -496,7 +506,7 @@ void update_round(pkg_number_to_veriry_pt number_to_verify, HWND text_hwnd)
 	char line[1000];
 	if (NIVEL_DEBUG == 0)
 	{
-		sprintf_s(line, sizeof(line), "ATUALIZA ROUND do number: %d", number_to_verify->number);
+		sprintf_s(line, sizeof(line), "ATUALIZA ROUND do number: %d\n", number_to_verify->number);
 		printf_(text_hwnd, line);
 	}
 	// incrementa number_to_verify->contador
@@ -526,7 +536,7 @@ bool_t process_number(id_t processing_thread, buffer_IO_pt buffer_out, buffer_de
 		// insere número
 		number_to_verify->id_Thread_que_resolveu = processing_thread;
 		insert_in_buffer_internal_primos(buffer_primos, number_to_verify, processing_thread, text_hwnd);
-		sprintf_s(line, sizeof(line), "numero %d foi verificado como PRIMO na Thread #%d e ROUND #%d", number_to_verify->number, processing_thread, number_to_verify->round);
+		sprintf_s(line, sizeof(line), "numero %d foi verificado como PRIMO na Thread #%d e ROUND #%d\n", number_to_verify->number, processing_thread, number_to_verify->round);
 		printf_(text_hwnd, line);
 		// enviar para thread resultado
 	}
@@ -546,7 +556,7 @@ bool_t process_number(id_t processing_thread, buffer_IO_pt buffer_out, buffer_de
 		}
 		else
 		{
-			sprintf_s(line, sizeof(line), "numero %d foi verificado como NAO PRIMO na Thread #%d e ROUND #%d", number_to_verify->number, processing_thread, number_to_verify->round);
+			sprintf_s(line, sizeof(line), "numero %d foi verificado como NAO PRIMO na Thread #%d e ROUND #%d\n", number_to_verify->number, processing_thread, number_to_verify->round);
 			printf_(text_hwnd, line);
 		}
 	}
@@ -639,7 +649,7 @@ int main(int argc, char* argv[])
 		buffer interno(que guarda os numeros primos)
 	*/
 	// N
-	int numero_a_serem_testados = 131313;
+	int numero_a_serem_testados = 1000;
 	// M
 	int qtd_de_threads_de_processamento = 2;
 	// K
@@ -716,11 +726,14 @@ int main(int argc, char* argv[])
 		pthread_create(&ts_sieves_processamento[id], NULL, &thread_sieve_processamento, (void*)pkgs_tsp[id]);
 	}
 
+	// PARA JANELAS
 	MSG msg;
 	while (GetMessage(&msg, NULL, 0, 0)) {
 		TranslateMessage(&msg);
 		DispatchMessage(&msg);
 	}
+	// FIM DO PARA JANELAS
+
 	for (id = 0; id < qtd_de_threads_de_processamento; id++)
 	{
 		pthread_join(ts_sieves_processamento[id], NULL);
