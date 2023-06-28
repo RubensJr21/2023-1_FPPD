@@ -44,14 +44,6 @@
 
 */
 
-/*
-	Níveis:
-		0 => TUDO
-		1 => Apenas Sinais e conds
-*/
-
-#define NIVEL_DEBUG 1
-
 // https://medium.com/@selvarajk/adding-color-to-your-output-from-c-58f1a4dc4e75
 
 #define ANSI_COLOR_RED     	 "\033[0;31m" //cores em ANSI utilizadas 
@@ -69,10 +61,17 @@
 #define FALSE 0
 #define bool_t int
 
-#define WINDOW TRUE
+#define WINDOW FALSE
+
+#define PRINT_MUTEXES FALSE
+#define PRINT_UPDATE_ROUND FALSE
+#define PRINT_NUM_GERADO FALSE
+#define PRINT_SEMAFOROS FALSE
+#define PRINT_LIBERAR_POSICAO FALSE
+#define PRINT_BUFFER TRUE
 
 // Estrutura para os argumentos da janela da thread
-typedef struct {
+typedef struct ARGSWINDOW{
 	int x;
 	int y;
 	int width;
@@ -109,7 +108,7 @@ void printf_(HWND text_hwnd, const char* formato, ...)
 	}
 }
 
-typedef struct {
+typedef struct PKG_NUMBER_TO_VERIFY{
 	bignumber_t number;
 	round_t round;
 	int contador;
@@ -128,7 +127,7 @@ pkg_number_to_veriry_pt create_pkg_number_to_veriry(bignumber_t number, int qtd_
 	return pkg;
 }
 
-typedef struct {
+typedef struct BUFFER_RESULTADOS {
 	int current_index;
 	pkg_number_to_veriry_pt* buffer; // tamanho = X/ln(x)
 	int max_size_buffer; // usado para calcular o round do number_to_verify
@@ -145,14 +144,13 @@ buffer_resultados_pt create_buffer_resultados(int numeros_a_serem_calculados)
 
 	buffer_resultados_pt b = malloc(sizeof(buffer_resultados_t));
 	// https://www.clubedohardware.com.br/forums/topic/933851-como-fazer-lnx-em-c/
-	int max_size_buffer = (int)(numeros_a_serem_calculados / log(numeros_a_serem_calculados));
-	b->buffer = malloc(sizeof(pkg_number_to_veriry_pt) * max_size_buffer); // tamanho = X / ln(x)
+	b->buffer = malloc(sizeof(pkg_number_to_veriry_pt) * numeros_a_serem_calculados);
 	b->current_index = 0;
-	for (int index = 0; index < max_size_buffer; index++)
+	for (int index = 0; index < numeros_a_serem_calculados; index++)
 	{
 		b->buffer[index] = NULL;
 	}
-	b->max_size_buffer = max_size_buffer;
+	b->max_size_buffer = numeros_a_serem_calculados;
 	b->mutex = mutex;
 	b->cond = cond; // usado na inserção e no get
 	return b;
@@ -160,47 +158,19 @@ buffer_resultados_pt create_buffer_resultados(int numeros_a_serem_calculados)
 
 /////////////////////////////////////////////////////////////////////////////////
 
-typedef struct {
+typedef struct BUFFER_DE_PRIMOS{
 	pkg_number_to_veriry_pt* buffer;
 	int max_size_buffer; // usado para calcular o round do number_to_verify
-	pthread_mutex_t* mutex;
 }buffer_de_primos_t, * buffer_de_primos_pt;
 
 void insert_in_buffer_internal_primos(buffer_de_primos_pt buffer_primos, pkg_number_to_veriry_pt number_to_verify, int id, HWND text_hwnd)
 {
-	if (NIVEL_DEBUG == 0)
-	{
-		printf_(text_hwnd, "insert_in_buffer_internal_primos::THREAD #%d VAI LOCKAR %p\n", id, buffer_primos->mutex);
-	}
-	pthread_mutex_lock(buffer_primos->mutex);
-	if (NIVEL_DEBUG == 0)
-	{
-		printf_(text_hwnd, "insert_in_buffer_internal_primos::THREAD #%d LOCKOU %p\n", id, buffer_primos->mutex);
-	}
 	// envia o número para a primeira thread de processamento
 	buffer_primos->buffer[number_to_verify->round] = number_to_verify;
-	if (NIVEL_DEBUG == 0)
-	{
-		printf_(text_hwnd, "insert_in_buffer_internal_primos::THREAD #%d VAI DESLOCKAR %p\n", id, buffer_primos->mutex);
-	}
-	pthread_mutex_unlock(buffer_primos->mutex);
-	if (NIVEL_DEBUG == 0)
-	{
-		printf_(text_hwnd, "insert_in_buffer_internal_primos::THREAD #%d DESLOCKOU %p\n", id, buffer_primos->mutex);
-	}
 }
 
 primo_t get_number_from_buffer_internal_primos(buffer_de_primos_pt buffer_primos, int index, int id, HWND text_hwnd)
 {
-	if (NIVEL_DEBUG == 0)
-	{
-		printf_(text_hwnd, "get_number_from_buffer_internal_primos::THREAD #%d VAI LOCKAR %p\n", id, buffer_primos->mutex);
-	}
-	pthread_mutex_lock(buffer_primos->mutex);
-	if (NIVEL_DEBUG == 0)
-	{
-		printf_(text_hwnd, "get_number_from_buffer_internal_primos::THREAD #%d VAI LOCKAR %p\n", id, buffer_primos->mutex);
-	}
 	// Caso -1
 	if (index >= buffer_primos->max_size_buffer) // quer dizer que o espaço no buffer acabou, sendo assim encerrando o processo
 	{
@@ -209,15 +179,7 @@ primo_t get_number_from_buffer_internal_primos(buffer_de_primos_pt buffer_primos
 	//printf_(text_hwnd, "get_number_from_buffer_internal_primos::buffer_primos->buffer => %p\n", buffer_primos->buffer);
 
 	pkg_number_to_veriry_pt number_to_verify = buffer_primos->buffer[index];
-	if (NIVEL_DEBUG == 0)
-	{
-		printf_(text_hwnd, "get_number_from_buffer_internal_primos::THREAD #%d VAI DELOCKAR %p\n", id, buffer_primos->mutex);
-	}
-	pthread_mutex_unlock(buffer_primos->mutex);
-	if (NIVEL_DEBUG == 0)
-	{
-		printf_(text_hwnd, "get_number_from_buffer_internal_primos::THREAD #%d DESLOCKOU %p\n", id, buffer_primos->mutex);
-	}
+
 	if (number_to_verify == NULL)
 	{
 		return -1;
@@ -230,9 +192,6 @@ primo_t get_number_from_buffer_internal_primos(buffer_de_primos_pt buffer_primos
 
 buffer_de_primos_pt create_buffer_internal_primos(int max_size_buffer)
 {
-	pthread_mutex_t* mutex = malloc(sizeof(pthread_mutex_t));
-	pthread_mutex_init(mutex, NULL);
-
 	buffer_de_primos_pt b = malloc(sizeof(buffer_de_primos_t));
 	b->buffer = malloc(sizeof(primo_t) * max_size_buffer);
 	for (int index = 0; index < max_size_buffer; index++)
@@ -240,158 +199,52 @@ buffer_de_primos_pt create_buffer_internal_primos(int max_size_buffer)
 		b->buffer[index] = NULL;
 	}
 	b->max_size_buffer = max_size_buffer;
-	b->mutex = mutex;
 	return b;
 }
 
-typedef struct {
+typedef struct BUFFER_IO{
 	int current_index_writing;
 	int current_index_reading;
 	pkg_number_to_veriry_pt* buffer;
 	int max_size_buffer;
 	pthread_mutex_t* mutex;
 	pthread_cond_t* cond;
-	sem_t* sem;
+	sem_t* sem_espera; // fila para usar o buffer
+	sem_t* sem_mutex; // imita o mutex
 }buffer_IO_t, * buffer_IO_pt;
 
-void insert_in_buffer_IO(buffer_IO_pt buffer, pkg_number_to_veriry_pt number_to_verify, int id, HWND text_hwnd)
+void printf_bufferIO(HWND text_hwnd, id_t id, buffer_IO_pt buffer, int index, const char* function)
 {
-	if (NIVEL_DEBUG == 0)
+	char buffer_string[5000];
+	int i;
+	int escreveu_ate = sprintf_s(buffer_string, 5000, "%s::BUFFER THREAD #%d (pos atual: %d): ", function, id, index);
+	int qtd_chars = 10 * 2;
+	int tamanho_total = escreveu_ate + qtd_chars;
+	for (i = 0; i < 10 - 1; i++)
 	{
-		printf_(text_hwnd, "insert_in_buffer_IO::THREAD #%d VAI LOCKAR\n", id);
-	}
-	bool_t position_free = FALSE;
-	pthread_mutex_lock(buffer->mutex);
-	if (NIVEL_DEBUG == 0)
-	{
-		printf_(text_hwnd, "insert_in_buffer_IO::THREAD #%d LOCKOU\n", id);
-	}
-	// envia o número para a primeira thread de processamento
-	pkg_number_to_veriry_pt pos_verify = buffer->buffer[buffer->current_index_writing];
-	position_free = pos_verify == NULL;
-
-	// imprimir toda lista quando o a posição não estiver livre
-
-	if (position_free)
-	{
-		buffer->buffer[buffer->current_index_writing++] = number_to_verify;
-		// buffer_circular
-		buffer->current_index_writing = (buffer->current_index_writing % buffer->max_size_buffer);
-		if (NIVEL_DEBUG == 0)
+		if (buffer->buffer[i] != NULL)
 		{
-			printf_(text_hwnd, "insert_in_buffer_IO::THREAD #%d VAI DESLOCKAR\n", id);
-		}
-		pthread_mutex_unlock(buffer->mutex);
-		if (NIVEL_DEBUG == 0)
-		{
-			printf_(text_hwnd, "insert_in_buffer_IO::THREAD #%d DESLOCKOU\n", id);
-		}
-		printf_(text_hwnd, "insert_in_buffer_IO::THREAD #%d VAI ENVIAR UM SINAL\n", id);
-		pthread_cond_signal(buffer->cond);
-		printf_(text_hwnd, "insert_in_buffer_IO::THREAD #%d ENVIOU UM SINAL\n", id);
-	}
-	else
-	{
-		char buffer_string[5000];
-		int i;
-		int escreveu_ate = sprintf_s(buffer_string, 5000, "insert_in_buffer_IO::BUFFER (pos atual: %d): ", buffer->current_index_writing);
-		int qtd_chars = 10 * 2;
-		int tamanho_total = escreveu_ate + qtd_chars;
-		for (i = 0; i < 10 - 1; i++)
-		{
-			if (buffer->buffer[i] != NULL)
-			{
-				escreveu_ate += sprintf_s(buffer_string + escreveu_ate, 5000 - escreveu_ate, "%d,", buffer->buffer[i]->number);
-			}
-			else
-			{
-				escreveu_ate += sprintf_s(buffer_string + escreveu_ate, 5000 - escreveu_ate, "N,");
-			}
-		}
-		if (buffer->buffer[i])
-		{
-			escreveu_ate += sprintf_s(buffer_string + escreveu_ate, 5000 - escreveu_ate, "%d.\n", buffer->buffer[i]->number);
+			escreveu_ate += sprintf_s(buffer_string + escreveu_ate, 5000 - escreveu_ate, "%d,", buffer->buffer[i]->number);
 		}
 		else
 		{
-			escreveu_ate += sprintf_s(buffer_string + escreveu_ate, 5000 - escreveu_ate, "N.\n");
-		}
-
-		printf_(text_hwnd, buffer_string);
-
-
-		// esperar liberar
-		// usar cond
-		printf_(text_hwnd, "insert_in_buffer_IO::THREAD #%d VAI ESPERAR UM SINAL\n", id);
-		// verificar a necessidade de colocar um semaforo de uma posição aqui
-		pthread_cond_wait(buffer->cond, buffer->mutex);
-		printf_(text_hwnd, "insert_in_buffer_IO::THREAD #%d RECEBEU SINAL\n", id);
-		buffer->buffer[buffer->current_index_writing++] = number_to_verify;
-		// buffer_circular
-		buffer->current_index_writing = (buffer->current_index_writing % buffer->max_size_buffer);
-		//printf_(text_hwnd, "insert_in_buffer_IO::buffer->current_index_writing => %d", buffer->current_index_writing);
-		if (NIVEL_DEBUG == 0)
-		{
-			printf_(text_hwnd, "insert_in_buffer_IO::THREAD #%d VAI DESLOCKAR\n", id);
-		}
-		pthread_mutex_unlock(buffer->mutex);
-		if (NIVEL_DEBUG == 0)
-		{
-			printf_(text_hwnd, "insert_in_buffer_IO::THREAD #%d DESLOCKOU\n", id);
+			escreveu_ate += sprintf_s(buffer_string + escreveu_ate, 5000 - escreveu_ate, "N,");
 		}
 	}
-}
+	if (buffer->buffer[i])
+	{
+		escreveu_ate += sprintf_s(buffer_string + escreveu_ate, 5000 - escreveu_ate, "%d.\n", buffer->buffer[i]->number);
+	}
+	else
+	{
+		escreveu_ate += sprintf_s(buffer_string + escreveu_ate, 5000 - escreveu_ate, "N.\n");
+	}
 
-pkg_number_to_veriry_pt get_number_from_buffer_IO(buffer_IO_pt buffer, int id, HWND text_hwnd)
-{
-	if (NIVEL_DEBUG == 0)
-	{
-		printf_(text_hwnd, "get_number_from_buffer_IO::THREAD #%d VAI LOCKAR %p\n", id, buffer->mutex);
-	}
-	pthread_mutex_lock(buffer->mutex);
-	if (NIVEL_DEBUG == 0)
-	{
-		printf_(text_hwnd, "get_number_from_buffer_IO::THREAD #%d LOCKOU %p\n", id, buffer->mutex);
-	}
-	pkg_number_to_veriry_pt number = buffer->buffer[buffer->current_index_reading];
-	// buffer_circular
-	if (number == NULL) // significa que a posição está vazia, deve esperar que a posição receba alguém
-	{
-		printf_(text_hwnd, "get_number_from_buffer_IO::THREAD #%d VAI ESPERAR UM SINAL\n", id);
-		pthread_cond_wait(buffer->cond, buffer->mutex);
-		printf_(text_hwnd, "get_number_from_buffer_IO::THREAD #%d RECEBEU SINAL\n", id);
-		number = buffer->buffer[buffer->current_index_reading];
-	}
-	// indicar que posição está livre
-	int old_index = buffer->current_index_reading;
-	buffer->buffer[buffer->current_index_reading++] = NULL;
-	// atualizar index
-	buffer->current_index_reading = (buffer->current_index_reading % buffer->max_size_buffer);
-	if (NIVEL_DEBUG == 0)
-	{
-		printf_(text_hwnd, "get_number_from_buffer_IO::THREAD #%d VAI DESLOCKAR %p\n", id, buffer->mutex);
-	}
-	if (NIVEL_DEBUG == 0)
-	{
-		printf_(text_hwnd, "get_number_from_buffer_IO::THREAD #%d DESLOCKOU %p\n", id, buffer->mutex);
-	}
-	pthread_mutex_unlock(buffer->mutex);
-	// ver possibilidade de semaforo aqui
-	printf_(text_hwnd, "get_number_from_buffer_IO::THREAD #%d VAI ENVIAR UM SINAL\n", id);
-	pthread_cond_signal(buffer->cond);
-	printf_(text_hwnd, "get_number_from_buffer_IO::THREAD #%d ENVIOU SINAL\n", id);
-	return number;
+	printf_(text_hwnd, buffer_string);
 }
 
 buffer_IO_pt create_buffer_IO(int max_size_buffer)
 {
-	pthread_mutex_t* mutex = malloc(sizeof(pthread_mutex_t));
-	pthread_mutex_init(mutex, NULL);
-	pthread_cond_t* cond = malloc(sizeof(pthread_cond_t));
-	pthread_cond_init(cond, NULL);
-	sem_t* sem = malloc(sizeof(sem_t));
-	sem_init(sem, 0, max_size_buffer);
-
 	buffer_IO_pt b = malloc(sizeof(buffer_IO_t));
 	b->current_index_writing = 0;
 	b->current_index_reading = 0;
@@ -401,24 +254,38 @@ buffer_IO_pt create_buffer_IO(int max_size_buffer)
 		b->buffer[index] = NULL;
 	}
 	b->max_size_buffer = max_size_buffer;
-	b->mutex = mutex;
-	b->cond = cond;
-	b->sem = sem;
+	b->mutex = malloc(sizeof(pthread_mutex_t));
+	pthread_mutex_init(b->mutex, NULL);
+
+	b->cond = malloc(sizeof(pthread_cond_t));
+	pthread_cond_init(b->cond, NULL);
+
+	b->sem_espera = malloc(sizeof(sem_t));
+	sem_init(b->sem_espera, 0, max_size_buffer);
+
+	b->sem_mutex = malloc(sizeof(sem_t));
+	sem_init(b->sem_mutex, 0, 1);
 	return b;
 }
 
-typedef struct {
+typedef struct GERADORA_TERMINOU{
+	pthread_mutex_t* mutex;
+	bool_t terminou;
+} geradora_terminou_t, * geradora_terminou_pt;
+
+typedef struct PKG_THREAD_GERADORA{
 	id_t id;
 	int numeros_a_serem_gerados;
 	buffer_IO_pt buffer_out;
 	int qtd_de_threads;
+	sem_t* end_process;
 
 	// PARA JANELA
 	HWND hwnd;
 	HWND text_hwnd;
 }pkg_thread_geradora_t, * pkg_thread_geradora_pt;
 
-pkg_thread_geradora_pt create_pkg_thread_geradora(id_t id, int size_buffer, int qtd_threads, int numeros_a_serem_gerados)
+pkg_thread_geradora_pt create_pkg_thread_geradora(id_t id, int size_buffer, int qtd_threads, int numeros_a_serem_gerados, sem_t* sem_end_process)
 {
 	buffer_IO_pt buffer = create_buffer_IO(size_buffer);
 	pkg_thread_geradora_pt tg = malloc(sizeof(pkg_thread_geradora_t));
@@ -426,13 +293,14 @@ pkg_thread_geradora_pt create_pkg_thread_geradora(id_t id, int size_buffer, int 
 	tg->numeros_a_serem_gerados = numeros_a_serem_gerados;
 	tg->qtd_de_threads = qtd_threads;
 	tg->buffer_out = buffer;
+	tg->end_process = sem_end_process;
 	return tg;
 }
 
 void* thread_geradora(void* args)
 {
 	pkg_thread_geradora_pt pkg = (pkg_thread_geradora_pt)args;
-	buffer_IO_pt buffer = pkg->buffer_out;
+	buffer_IO_pt buffer_out = pkg->buffer_out;
 	int qtd_de_threads = pkg->qtd_de_threads;
 	bignumber_t number = 2;
 	pkg_number_to_veriry_pt ntv;
@@ -441,9 +309,9 @@ void* thread_geradora(void* args)
 	while (numeros_gerados < pkg->numeros_a_serem_gerados)
 	{
 		ntv = create_pkg_number_to_veriry(number, qtd_de_threads);
-		if (NIVEL_DEBUG == 0)
+		if (PRINT_NUM_GERADO)
 		{
-			printf_(pkg->text_hwnd, "numero gerado: %d\n", number);
+			printf_(pkg->text_hwnd, "thread_geradora::numero gerado: %d\n", number);
 
 		}
 
@@ -454,25 +322,90 @@ void* thread_geradora(void* args)
 
 		pthread_mutex_unlock(buffer->mutex);
 		*/
-		insert_in_buffer_IO(buffer, ntv, 1, pkg->text_hwnd);
-		number++;
+		//insert_in_buffer_IO(buffer, ntv, 1, pkg->text_hwnd);
+
+		/// *** INSERT ***
+
+		printf_(pkg->text_hwnd, "insert_in_buffer_IO::THREAD #%d VAI ESPERAR o semaforo 'buffer_out->sem_espera'\n", pkg->id);
+		sem_wait(buffer_out->sem_espera);
+		printf_(pkg->text_hwnd, "insert_in_buffer_IO::THREAD #%d ESPEROU o semaforo 'buffer_out->sem_espera'\n", pkg->id);
+
+		bool_t position_free = FALSE;
+
+		if (PRINT_MUTEXES) printf_(pkg->text_hwnd, "insert_in_buffer_IO::THREAD #%d VAI LOCKAR\n", pkg->id);
+		//pthread_mutex_lock(buffer_out->mutex);
+		sem_wait(buffer_out->sem_mutex);
+		if (PRINT_MUTEXES) printf_(pkg->text_hwnd, "insert_in_buffer_IO::THREAD #%d LOCKOU\n", pkg->id);
+
+		// envia o número para a primeira thread de processamento
+		pkg_number_to_veriry_pt pos_verify = buffer_out->buffer[buffer_out->current_index_writing];
+		position_free = pos_verify == NULL;
+		
+		// SE A POSIÇÃO ESTIVER LIVRE ESCREVE E LIBERA PARA LEITURA
+		// SE NÃO ESTIVER, LIBERA E TENTA AGUARDA PARA VERIFICAR OUTRA VEZ
+
+		if (position_free)
+		{
+			if (PRINT_LIBERAR_POSICAO) printf_(pkg->text_hwnd, "insert_in_buffer_IO::THREAD #%d VAI LIBERAR POSICAO %d PARA LEITURA\n", pkg->id, buffer_out->current_index_writing);
+
+			// ESCREVE NA POSIÇÃO
+			buffer_out->buffer[buffer_out->current_index_writing++] = ntv;
+
+			if (PRINT_BUFFER) printf_bufferIO(pkg->text_hwnd, pkg->id, buffer_out, buffer_out->current_index_writing - 1, "insert_in_buffer_IO");
+
+			// ATUALIZA INDEX DE ESCRITA PARA PRÓXIMA TENTATIVA
+			buffer_out->current_index_writing = (buffer_out->current_index_writing % buffer_out->max_size_buffer);
+
+			// LIBERA O MUTEX PARA OUTRA THREAD
+			if (PRINT_MUTEXES) printf_(pkg->text_hwnd, "insert_in_buffer_IO::THREAD #%d VAI DESLOCKAR\n", pkg->id);
+			//pthread_mutex_unlock(buffer_out->mutex);
+			sem_post(buffer_out->sem_mutex);
+			if (PRINT_MUTEXES) printf_(pkg->text_hwnd, "insert_in_buffer_IO::THREAD #%d DESLOCKOU\n", pkg->id);
+
+			// LIBERA SEMAFORO
+			sem_post(buffer_out->sem_espera);
+
+			number++;
+			numeros_gerados++;
+		}
+		else
+		{
+			// imprimir toda lista quando o a posição não estiver livre
+			printf_bufferIO(pkg->text_hwnd, pkg->id, buffer_out, buffer_out->current_index_writing, "insert_in_buffer_IO");
+
+			// LIBERA O MUTEX PARA OUTRA THREAD
+			if (PRINT_MUTEXES) printf_(pkg->text_hwnd, "insert_in_buffer_IO::THREAD #%d VAI DESLOCKAR\n", pkg->id);
+			//pthread_mutex_unlock(buffer_out->mutex);
+			sem_post(buffer_out->sem_mutex);
+			if (PRINT_MUTEXES) printf_(pkg->text_hwnd, "insert_in_buffer_IO::THREAD #%d DESLOCKOU\n", pkg->id);
+
+			// LIBERA SEMAFORO
+			sem_post(buffer_out->sem_espera);
+			
+			// RECOMECA O LOOP
+		}
+
+		/// *** FIM INSERT ***
 	}
+	sem_post(pkg->end_process);
 	return NULL;
 }
 
-typedef struct {
+typedef struct PHA_THREAD_SIEVE_PROCESSAMENTO{
 	id_t id;
 	buffer_IO_pt buffer_in; // tamanho K
 	buffer_IO_pt buffer_out; // tamanho K
 	buffer_resultados_pt buffer_resultados;
 	int size_buffer_internal; // valor do X
 
+	geradora_terminou_pt geradora_terminou;
+
 	// PARA JANELA
 	HWND hwnd;
 	HWND text_hwnd;
 }pkg_thread_sieve_processamento_t, * pkg_thread_sieve_processamento_pt;
 
-pkg_thread_sieve_processamento_pt create_pkg_thread_sieve_processamento(id_t id, buffer_IO_pt buffer_in, buffer_IO_pt buffer_out, int buffer_size_internal, buffer_resultados_pt buffer_resultados)
+pkg_thread_sieve_processamento_pt create_pkg_thread_sieve_processamento(id_t id, buffer_IO_pt buffer_in, buffer_IO_pt buffer_out, int buffer_size_internal, buffer_resultados_pt buffer_resultados, geradora_terminou_pt g_term)
 {
 	pkg_thread_sieve_processamento_pt tsp = malloc(sizeof(pkg_thread_sieve_processamento_t));
 	tsp->id = id;
@@ -480,14 +413,15 @@ pkg_thread_sieve_processamento_pt create_pkg_thread_sieve_processamento(id_t id,
 	tsp->buffer_out = buffer_out;
 	tsp->buffer_resultados = buffer_resultados;
 	tsp->size_buffer_internal = buffer_size_internal;
+	tsp->geradora_terminou = g_term;
 	return tsp;
 }
 
 void update_round(pkg_number_to_veriry_pt number_to_verify, HWND text_hwnd)
 {
-	if (NIVEL_DEBUG == 0)
+	if (PRINT_UPDATE_ROUND)
 	{
-		printf_(text_hwnd, "ATUALIZA ROUND do number: %d\n", number_to_verify->number);
+		printf_(text_hwnd, "update_round::ATUALIZA ROUND do number: %d\n", number_to_verify->number);
 	}
 	// incrementa number_to_verify->contador
 	number_to_verify->contador++;
@@ -495,6 +429,7 @@ void update_round(pkg_number_to_veriry_pt number_to_verify, HWND text_hwnd)
 	number_to_verify->round = (int)(number_to_verify->contador / number_to_verify->qtd_de_threads); // retorna valor inteiro que corresponde ao round
 }
 
+/*
 bool_t process_number(id_t processing_thread, buffer_IO_pt buffer_out, buffer_de_primos_pt buffer_primos, pkg_number_to_veriry_pt number_to_verify, HWND text_hwnd)
 {
 	// obtém número primo que tentará dividir o number_to_verify
@@ -506,8 +441,7 @@ bool_t process_number(id_t processing_thread, buffer_IO_pt buffer_out, buffer_de
 	// buffer não tem mais espaço, encerra o processamento de todas as threads
 	if (numero_do_vetor_de_primos == -2)
 	{
-		printf_(text_hwnd, "***NAO TEM MAIS ESPACO PARA GUARDAR PRIMOS***");
-		system("pause");
+		printf_(text_hwnd, ANSI_COLOR_RED "process_number::***NAO TEM MAIS ESPACO PARA GUARDAR PRIMOS***" ANSI_COLOR_RESET);
 		return FALSE;
 	}
 	// Caso 0
@@ -516,7 +450,7 @@ bool_t process_number(id_t processing_thread, buffer_IO_pt buffer_out, buffer_de
 		// insere número
 		number_to_verify->id_Thread_que_resolveu = processing_thread;
 		insert_in_buffer_internal_primos(buffer_primos, number_to_verify, processing_thread, text_hwnd);
-		printf_(text_hwnd, "numero %d foi verificado como PRIMO na Thread #%d e ROUND #%d\n", number_to_verify->number, processing_thread, number_to_verify->round);
+		printf_(text_hwnd, "process_number::numero %d foi verificado como PRIMO na Thread #%d e ROUND #%d\n", number_to_verify->number, processing_thread, number_to_verify->round);
 		// enviar para thread resultado
 	}
 	else
@@ -535,12 +469,12 @@ bool_t process_number(id_t processing_thread, buffer_IO_pt buffer_out, buffer_de
 		}
 		else
 		{
-			printf_(text_hwnd, "numero %d foi verificado como NAO PRIMO na Thread #%d e ROUND #%d\n", number_to_verify->number, processing_thread, number_to_verify->round);
+			printf_(text_hwnd, "process_number::numero %d foi verificado como NAO PRIMO na Thread #%d e ROUND #%d\n", number_to_verify->number, processing_thread, number_to_verify->round);
 		}
 	}
 	return TRUE;
 }
-
+*/
 void* thread_sieve_processamento(void* args)
 {
 	pkg_thread_sieve_processamento_pt pkg = (pkg_thread_sieve_processamento_pt)args;
@@ -549,8 +483,7 @@ void* thread_sieve_processamento(void* args)
 	buffer_IO_pt buffer_out = pkg->buffer_out;
 	buffer_de_primos_pt buffer_primos = create_buffer_internal_primos(pkg->size_buffer_internal);
 	pkg_number_to_veriry_pt ntv;
-	bool_t continuar_processamento = TRUE;
-	while (continuar_processamento)
+	while (TRUE)
 	{
 		/*
 			Casos possíveis:
@@ -563,14 +496,171 @@ void* thread_sieve_processamento(void* args)
 				2.1: Descartar o número, pegando o próximo do buffer
 		*/
 		// obtém número que será verificado
-		ntv = get_number_from_buffer_IO(buffer_in, pkg->id, pkg->text_hwnd); // função assincrona
-		// processar()
-		continuar_processamento = process_number(pkg->id, buffer_out, buffer_primos, ntv, pkg->text_hwnd);
+		//ntv = get_number_from_buffer_IO(buffer_in, pkg->id, pkg->text_hwnd); // função assincrona
+
+
+		/// *** GET ***
+
+		printf_(pkg->text_hwnd, "get_number_from_buffer_IO::THREAD #%d VAI ESPERAR o semaforo 'buffer_in->sem'\n", pkg->id);
+		sem_wait(buffer_in->sem_espera);
+		printf_(pkg->text_hwnd, "get_number_from_buffer_IO::THREAD #%d ESPEROU o semaforo 'buffer_in->sem'\n", pkg->id);
+
+		if (PRINT_MUTEXES) printf_(pkg->text_hwnd, "get_number_from_buffer_IO::THREAD #%d VAI LOCKAR %p\n", pkg->id, buffer_in->mutex);
+		//pthread_mutex_lock(buffer_in->mutex);
+		sem_wait(buffer_in->sem_mutex);
+		if (PRINT_MUTEXES) printf_(pkg->text_hwnd, "get_number_from_buffer_IO::THREAD #%d LOCKOU %p\n", pkg->id, buffer_in->mutex);
+
+		pkg_number_to_veriry_pt number = buffer_in->buffer[buffer_in->current_index_reading];
+		
+		// SE FOR NULO ELE ESTÁ TENTANDO LER ANTES DE ALGUÉM ESCREVER
+		// LIBERA O SEMAFORO, E TENTA LER OUTRA VEZ
+		
+		if (number == NULL) // significa que a posição está vazia, deve esperar que a posição receba alguém
+		{
+			//pthread_cond_wait(buffer_in->cond, buffer_in->mutex);
+			sem_post(buffer_in->sem_mutex);
+		}
+		else
+		{
+			if (PRINT_LIBERAR_POSICAO) printf_(pkg->text_hwnd, "get_number_from_buffer_IO::THREAD #%d VAI LIBERAR A POSICAO %d PARA ESCRITA\n", pkg->id, buffer_in->current_index_reading);
+			//if(PRINT_BUFFER) printf_bufferIO(pkg->text_hwnd, pkg->id, buffer, buffer_in->current_index_reading, "get_number_from_buffer_IO");
+
+			// Lê número
+			number = buffer_in->buffer[buffer_in->current_index_reading];
+
+			// Libera posição para escrita
+			buffer_in->buffer[buffer_in->current_index_reading++] = NULL;
+
+			if (PRINT_BUFFER) printf_bufferIO(pkg->text_hwnd, pkg->id, buffer_in, buffer_in->current_index_reading - 1, "get_number_from_buffer_IO");
+
+			// atualizar index
+			buffer_in->current_index_reading = (buffer_in->current_index_reading % buffer_in->max_size_buffer);
+			// ver possibilidade de semaforo aqui
+			sem_post(buffer_in->sem_mutex);
+		}
+
+		//pthread_cond_signal(buffer_in->cond);
+		if (PRINT_MUTEXES) printf_(pkg->text_hwnd, "get_number_from_buffer_IO::THREAD #%d VAI DESLOCKAR %p\n", pkg->id, buffer_in->mutex);
+		//pthread_mutex_unlock(buffer_in->mutex);
+		// Libera lugar na fila de espera
+		sem_post(buffer_in->sem_espera);
+		if (PRINT_MUTEXES) printf_(pkg->text_hwnd, "get_number_from_buffer_IO::THREAD #%d DESLOCKOU %p\n", pkg->id, buffer_in->mutex);
+		ntv = number;
+
+		/// FIM DO GET
+
+		// PROCESSAR()
+
+		if(ntv != NULL)
+		{
+			// obtém número primo que tentará dividir o ntv
+			primo_t numero_do_vetor_de_primos = get_number_from_buffer_internal_primos(buffer_primos, ntv->round, pkg->id, pkg->text_hwnd);
+			// verifica se existe algum número no buffer de primos na posição ntv->round
+			// numero_do_vetor_de_primos == -1; não existe número naquela posição
+			// numero_do_vetor_de_primos != -1; existe número naquela posição
+			// Caso -1
+			// buffer não tem mais espaço, encerra o processamento de todas as threads
+			if (numero_do_vetor_de_primos == -2)
+			{
+				printf_(pkg->text_hwnd, ANSI_COLOR_RED "process_number::***NAO TEM MAIS ESPACO PARA GUARDAR PRIMOS***" ANSI_COLOR_RESET);
+				// aqui deve parar de rodar o código
+				system("pause");
+			}
+			// Caso 0
+			if (numero_do_vetor_de_primos == -1)
+			{
+				// insere número
+				ntv->id_Thread_que_resolveu = pkg->id;
+				insert_in_buffer_internal_primos(buffer_primos, ntv, pkg->id, pkg->text_hwnd);
+				printf_(pkg->text_hwnd, "process_number::numero %d foi verificado como PRIMO na Thread #%d e ROUND #%d\n", ntv->number, pkg->id, ntv->round);
+				// enviar para thread resultado
+			}
+			else
+			{
+				// verificar se o ntv é divisível pelo numero_do_vetor_de_primos
+				bignumber_t resultado = ntv->number % numero_do_vetor_de_primos;
+				// resultado == 0, é divisível. Não é primo, descarta
+				// resultado != 0, não é divisível
+				// Caso 1
+				if (resultado != 0)
+				{
+					// incrementa ntv->contador e atualiza o ntv->round
+					update_round(ntv, pkg->text_hwnd);
+					// passa para a próxima thread => escrver no buffer_out
+					//insert_in_buffer_IO(buffer_out, ntv, pkg->id, pkg->text_hwnd);
+
+					/// *** INSERT ***
+
+					printf_(pkg->text_hwnd, "insert_in_buffer_IO::THREAD #%d VAI ESPERAR o semaforo 'buffer_out->sem_espera'\n", pkg->id);
+					sem_wait(buffer_out->sem_espera);
+					printf_(pkg->text_hwnd, "insert_in_buffer_IO::THREAD #%d ESPEROU o semaforo 'buffer_out->sem_espera'\n", pkg->id);
+
+					bool_t position_free = FALSE;
+
+					if (PRINT_MUTEXES) printf_(pkg->text_hwnd, "insert_in_buffer_IO::THREAD #%d VAI LOCKAR\n", pkg->id);
+					//pthread_mutex_lock(buffer_out->mutex);
+					sem_wait(buffer_out->sem_mutex);
+					if (PRINT_MUTEXES) printf_(pkg->text_hwnd, "insert_in_buffer_IO::THREAD #%d LOCKOU\n", pkg->id);
+
+					// envia o número para a primeira thread de processamento
+					pkg_number_to_veriry_pt pos_verify = buffer_out->buffer[buffer_out->current_index_writing];
+					position_free = pos_verify == NULL;
+
+					// SE A POSIÇÃO ESTIVER LIVRE ESCREVE E LIBERA PARA LEITURA
+					// SE NÃO ESTIVER, LIBERA E TENTA AGUARDA PARA VERIFICAR OUTRA VEZ
+
+					if (position_free)
+					{
+						if (PRINT_LIBERAR_POSICAO) printf_(pkg->text_hwnd, "insert_in_buffer_IO::THREAD #%d VAI LIBERAR POSICAO %d PARA LEITURA\n", pkg->id, buffer_out->current_index_writing);
+
+						// ESCREVE NA POSIÇÃO
+						buffer_out->buffer[buffer_out->current_index_writing++] = ntv;
+
+						if (PRINT_BUFFER) printf_bufferIO(pkg->text_hwnd, pkg->id, buffer_out, buffer_out->current_index_writing - 1, "insert_in_buffer_IO");
+
+						// ATUALIZA INDEX DE ESCRITA PARA PRÓXIMA TENTATIVA
+						buffer_out->current_index_writing = (buffer_out->current_index_writing % buffer_out->max_size_buffer);
+
+						// LIBERA O MUTEX PARA OUTRA THREAD
+						if (PRINT_MUTEXES) printf_(pkg->text_hwnd, "insert_in_buffer_IO::THREAD #%d VAI DESLOCKAR\n", pkg->id);
+						//pthread_mutex_unlock(buffer_out->mutex);
+						sem_post(buffer_out->sem_mutex);
+						if (PRINT_MUTEXES) printf_(pkg->text_hwnd, "insert_in_buffer_IO::THREAD #%d DESLOCKOU\n", pkg->id);
+
+						// LIBERA SEMAFORO
+						sem_post(buffer_out->sem_espera);
+					}
+					else
+					{
+						// imprimir toda lista quando o a posição não estiver livre
+						printf_bufferIO(pkg->text_hwnd, pkg->id, buffer_out, buffer_out->current_index_writing, "insert_in_buffer_IO");
+
+						// LIBERA O MUTEX PARA OUTRA THREAD
+						if (PRINT_MUTEXES) printf_(pkg->text_hwnd, "insert_in_buffer_IO::THREAD #%d VAI DESLOCKAR\n", pkg->id);
+						//pthread_mutex_unlock(buffer_out->mutex);
+						sem_post(buffer_out->sem_mutex);
+						if (PRINT_MUTEXES) printf_(pkg->text_hwnd, "insert_in_buffer_IO::THREAD #%d DESLOCKOU\n", pkg->id);
+
+						// LIBERA SEMAFORO
+						sem_post(buffer_out->sem_espera);
+
+						// RECOMECA O LOOP
+					}
+
+					/// *** FIM INSERT ***
+				}
+				else
+				{
+					printf_(pkg->text_hwnd, "process_number::numero %d foi verificado como NAO PRIMO na Thread #%d e ROUND #%d\n", ntv->number, pkg->id, ntv->round);
+				}
+			}
+			// FIM PROCESSAR
+		}
 	}
 	return NULL;
 }
 
-typedef struct {
+typedef struct PKG_THREAD_RESULTADO{
 	id_t id;
 	buffer_resultados_pt buffer_resultados; // tamanho = X/ln(x)
 
@@ -606,18 +696,20 @@ void createThreadResultadosWindow(pkg_thread_resultado_pt thread_args, ArgsWindo
 // Função para criar e personalizar uma janela da thread
 void createThreadSieveProcessamentoWindow(pkg_thread_sieve_processamento_pt thread_args, ArgsWindow* window_args);
 
-// Função da thread
-void* thread_function(void* arg);
 
 // Função para configurar os argumentos da janela
 void configure_args_window(ArgsWindow* window_args, int x, int y, int width, int height);
 
 int main(int argc, char* argv[])
 {
+
 	pthread_t t_geradora, t_resultado;
 
 	pthread_t* ts_sieves_processamento;
 	pkg_thread_sieve_processamento_pt* pkgs_tsp;
+
+	sem_t sem_end_process;
+	sem_init(&sem_end_process, 0, 0);
 
 	/*
 		N: quantidade de primos que a devem ter na thread RESULTADO
@@ -627,7 +719,7 @@ int main(int argc, char* argv[])
 		buffer interno(que guarda os numeros primos)
 	*/
 	// N
-	int numero_a_serem_testados = 1000;
+	int numero_a_serem_testados = 100000;
 	// M
 	int qtd_de_threads_de_processamento = 2;
 	// K
@@ -647,7 +739,7 @@ int main(int argc, char* argv[])
 
 	// FIM PARA JANELAS
 
-	pkg_thread_geradora_pt pkg_tg = create_pkg_thread_geradora(0, max_size_comunication_buffer, qtd_de_threads_de_processamento, numero_a_serem_testados);
+	pkg_thread_geradora_pt pkg_tg = create_pkg_thread_geradora(0, max_size_comunication_buffer, qtd_de_threads_de_processamento, numero_a_serem_testados, &sem_end_process);
 	buffer_IO_pt buffer_out_geradora = pkg_tg->buffer_out;
 
 	pkg_thread_resultado_pt pkg_tr = create_pkg_thread_resultado(1, numero_a_serem_testados);
@@ -678,9 +770,14 @@ int main(int argc, char* argv[])
 
 	id_t id;
 
+	geradora_terminou_pt g_term = malloc(sizeof(geradora_terminou_t));
+	g_term->mutex = malloc(sizeof(pthread_mutex_t));
+	pthread_mutex_init(g_term->mutex, NULL);
+	g_term->terminou = FALSE;
+
 	for (id = 0; id < qtd_de_threads_de_processamento - 1; id++) // id <= total_threads - 2 para parar na última e ser criada manualmente
 	{
-		pkgs_tsp[id] = create_pkg_thread_sieve_processamento(id + 2, buffer_in_tsp, buffer_out_tsp, max_size_internal_buffer, buffer_resultados_numeros_primos);
+		pkgs_tsp[id] = create_pkg_thread_sieve_processamento(id + 2, buffer_in_tsp, buffer_out_tsp, max_size_internal_buffer, buffer_resultados_numeros_primos, g_term);
 
 		// PARA JANELAS
 		configure_args_window(&argsWindow_tsp1, 0, thread_height, thread_width, thread_height);
@@ -692,7 +789,7 @@ int main(int argc, char* argv[])
 	}
 
 	buffer_out_tsp = buffer_out_geradora;
-	pkgs_tsp[id] = create_pkg_thread_sieve_processamento(id + 2, buffer_in_tsp, buffer_out_tsp, max_size_internal_buffer, buffer_resultados_numeros_primos);
+	pkgs_tsp[id] = create_pkg_thread_sieve_processamento(id + 2, buffer_in_tsp, buffer_out_tsp, max_size_internal_buffer, buffer_resultados_numeros_primos, g_term);
 
 	// PARA JANELAS
 	configure_args_window(&argsWindow_tsp2, thread_width, thread_height, thread_width, thread_height);
@@ -704,30 +801,30 @@ int main(int argc, char* argv[])
 		pthread_create(&ts_sieves_processamento[id], NULL, &thread_sieve_processamento, (void*)pkgs_tsp[id]);
 	}
 
-	// PARA JANELAS
-	MSG msg;
-	while (GetMessage(&msg, NULL, 0, 0)) {
-		TranslateMessage(&msg);
-		DispatchMessage(&msg);
+	if (WINDOW)
+	{
+		// PARA JANELAS
+		MSG msg;
+		while (GetMessage(&msg, NULL, 0, 0)) {
+			TranslateMessage(&msg);
+			DispatchMessage(&msg);
+		}
+		// FIM DO PARA JANELAS
 	}
-	// FIM DO PARA JANELAS
+
+	// espera receber um sinal de que pode parar o processo
+	sem_wait(&sem_end_process);
+	pthread_mutex_lock(g_term->mutex);
+	g_term->terminou = TRUE;
+	pthread_mutex_unlock(g_term->mutex);
+	printf(ANSI_COLOR_RED "Esperou o semaforo\n" ANSI_COLOR_RESET);
 
 	for (id = 0; id < qtd_de_threads_de_processamento; id++)
 	{
-		pthread_join(ts_sieves_processamento[id], NULL);
+		pthread_cancel(ts_sieves_processamento[id]);
 	}
 
-	pthread_join(t_geradora, NULL);
-	pthread_join(t_resultado, NULL);
-
-	/*
-		threads de processamento
-	*/
-
-	/*
-	pthread_cancel(t_geradora);
 	pthread_cancel(t_resultado);
-	*/
 
 	return 0;
 }
@@ -764,30 +861,33 @@ void createThreadGeradoraWindow(pkg_thread_geradora_pt thread_args, ArgsWindow* 
 	wc.hbrBackground = (HBRUSH)GetStockObject(BLACK_BRUSH);  // Fundo preto
 	RegisterClass(&wc);
 
-	// Criar a janela da thread
-	thread_args->hwnd = CreateWindowExW(0, wc.lpszClassName, window_title, WS_OVERLAPPEDWINDOW | WS_VISIBLE,
-		window_args->x, window_args->y, window_args->width, window_args->height,
-		NULL, NULL, wc.hInstance, NULL);
+	if (WINDOW)
+	{
+		// Criar a janela da thread
+		thread_args->hwnd = CreateWindowExW(0, wc.lpszClassName, window_title, WS_OVERLAPPEDWINDOW | WS_VISIBLE,
+			window_args->x, window_args->y, window_args->width, window_args->height,
+			NULL, NULL, wc.hInstance, NULL);
 
-	// Criar controle de edição de texto
-	thread_args->text_hwnd = CreateWindowW(L"EDIT", NULL, WS_CHILD | WS_VISIBLE | WS_VSCROLL | ES_MULTILINE | ES_READONLY,
-		0, 0, window_args->width, window_args->height,
-		thread_args->hwnd, NULL, wc.hInstance, NULL);
+		// Criar controle de edição de texto
+		thread_args->text_hwnd = CreateWindowW(L"EDIT", NULL, WS_CHILD | WS_VISIBLE | WS_VSCROLL | ES_MULTILINE | ES_READONLY,
+			0, 0, window_args->width, window_args->height,
+			thread_args->hwnd, NULL, wc.hInstance, NULL);
 
-	// Adicionar barra de rolagem ao controle de texto
-	SetWindowLongPtr(thread_args->text_hwnd, GWL_STYLE,
-		GetWindowLongPtr(thread_args->text_hwnd, GWL_STYLE) | WS_VSCROLL);
+		// Adicionar barra de rolagem ao controle de texto
+		SetWindowLongPtr(thread_args->text_hwnd, GWL_STYLE,
+			GetWindowLongPtr(thread_args->text_hwnd, GWL_STYLE) | WS_VSCROLL);
 
-	// Mostrar a janela
-	ShowWindow(thread_args->hwnd, SW_SHOW);
+		// Mostrar a janela
+		ShowWindow(thread_args->hwnd, SW_SHOW);
 
-	// Ajustar o tamanho do controle de texto para incluir a barra de rolagem
-	RECT client_rect;
-	GetClientRect(thread_args->hwnd, &client_rect);
-	int text_width = client_rect.right - client_rect.left;
-	int text_height = client_rect.bottom - client_rect.top;
-	int scrollbar_width = GetSystemMetrics(SM_CXVSCROLL);
-	SetWindowPos(thread_args->text_hwnd, NULL, 0, 0, text_width - scrollbar_width, text_height, SWP_NOMOVE | SWP_NOZORDER);
+		// Ajustar o tamanho do controle de texto para incluir a barra de rolagem
+		RECT client_rect;
+		GetClientRect(thread_args->hwnd, &client_rect);
+		int text_width = client_rect.right - client_rect.left;
+		int text_height = client_rect.bottom - client_rect.top;
+		int scrollbar_width = GetSystemMetrics(SM_CXVSCROLL);
+		SetWindowPos(thread_args->text_hwnd, NULL, 0, 0, text_width - scrollbar_width, text_height, SWP_NOMOVE | SWP_NOZORDER);
+	}
 }
 
 // Função para criar e personalizar uma janela da thread
@@ -804,30 +904,34 @@ void createThreadResultadosWindow(pkg_thread_resultado_pt thread_args, ArgsWindo
 	wc.hbrBackground = (HBRUSH)GetStockObject(BLACK_BRUSH);  // Fundo preto
 	RegisterClass(&wc);
 
-	// Criar a janela da thread
-	thread_args->hwnd = CreateWindowExW(0, wc.lpszClassName, window_title, WS_OVERLAPPEDWINDOW | WS_VISIBLE,
-		window_args->x, window_args->y, window_args->width, window_args->height,
-		NULL, NULL, wc.hInstance, NULL);
+	if (WINDOW)
+	{
+		// Criar a janela da thread
+		thread_args->hwnd = CreateWindowExW(0, wc.lpszClassName, window_title, WS_OVERLAPPEDWINDOW | WS_VISIBLE,
+			window_args->x, window_args->y, window_args->width, window_args->height,
+			NULL, NULL, wc.hInstance, NULL);
 
-	// Criar controle de edição de texto
-	thread_args->text_hwnd = CreateWindowW(L"EDIT", NULL, WS_CHILD | WS_VISIBLE | WS_VSCROLL | ES_MULTILINE | ES_READONLY,
-		0, 0, window_args->width, window_args->height,
-		thread_args->hwnd, NULL, wc.hInstance, NULL);
+		// Criar controle de edição de texto
+		thread_args->text_hwnd = CreateWindowW(L"EDIT", NULL, WS_CHILD | WS_VISIBLE | WS_VSCROLL | ES_MULTILINE | ES_READONLY,
+			0, 0, window_args->width, window_args->height,
+			thread_args->hwnd, NULL, wc.hInstance, NULL);
 
-	// Adicionar barra de rolagem ao controle de texto
-	SetWindowLongPtr(thread_args->text_hwnd, GWL_STYLE,
-		GetWindowLongPtr(thread_args->text_hwnd, GWL_STYLE) | WS_VSCROLL);
+		// Adicionar barra de rolagem ao controle de texto
+		SetWindowLongPtr(thread_args->text_hwnd, GWL_STYLE,
+			GetWindowLongPtr(thread_args->text_hwnd, GWL_STYLE) | WS_VSCROLL);
 
-	// Mostrar a janela
-	ShowWindow(thread_args->hwnd, SW_SHOW);
+		// Mostrar a janela
+		ShowWindow(thread_args->hwnd, SW_SHOW);
 
-	// Ajustar o tamanho do controle de texto para incluir a barra de rolagem
-	RECT client_rect;
-	GetClientRect(thread_args->hwnd, &client_rect);
-	int text_width = client_rect.right - client_rect.left;
-	int text_height = client_rect.bottom - client_rect.top;
-	int scrollbar_width = GetSystemMetrics(SM_CXVSCROLL);
-	SetWindowPos(thread_args->text_hwnd, NULL, 0, 0, text_width - scrollbar_width, text_height, SWP_NOMOVE | SWP_NOZORDER);
+		// Ajustar o tamanho do controle de texto para incluir a barra de rolagem
+		RECT client_rect;
+		GetClientRect(thread_args->hwnd, &client_rect);
+		int text_width = client_rect.right - client_rect.left;
+		int text_height = client_rect.bottom - client_rect.top;
+		int scrollbar_width = GetSystemMetrics(SM_CXVSCROLL);
+		SetWindowPos(thread_args->text_hwnd, NULL, 0, 0, text_width - scrollbar_width, text_height, SWP_NOMOVE | SWP_NOZORDER);
+	}
+
 }
 
 // Função para criar e personalizar uma janela da thread
@@ -844,30 +948,33 @@ void createThreadSieveProcessamentoWindow(pkg_thread_sieve_processamento_pt thre
 	wc.hbrBackground = (HBRUSH)GetStockObject(BLACK_BRUSH);  // Fundo preto
 	RegisterClass(&wc);
 
-	// Criar a janela da thread
-	thread_args->hwnd = CreateWindowExW(0, wc.lpszClassName, window_title, WS_OVERLAPPEDWINDOW | WS_VISIBLE,
-		window_args->x, window_args->y, window_args->width, window_args->height,
-		NULL, NULL, wc.hInstance, NULL);
+	if (WINDOW)
+	{
+		// Criar a janela da thread
+		thread_args->hwnd = CreateWindowExW(0, wc.lpszClassName, window_title, WS_OVERLAPPEDWINDOW | WS_VISIBLE,
+			window_args->x, window_args->y, window_args->width, window_args->height,
+			NULL, NULL, wc.hInstance, NULL);
 
-	// Criar controle de edição de texto
-	thread_args->text_hwnd = CreateWindowW(L"EDIT", NULL, WS_CHILD | WS_VISIBLE | WS_VSCROLL | ES_MULTILINE | ES_READONLY,
-		0, 0, window_args->width, window_args->height,
-		thread_args->hwnd, NULL, wc.hInstance, NULL);
+		// Criar controle de edição de texto
+		thread_args->text_hwnd = CreateWindowW(L"EDIT", NULL, WS_CHILD | WS_VISIBLE | WS_VSCROLL | ES_MULTILINE | ES_READONLY,
+			0, 0, window_args->width, window_args->height,
+			thread_args->hwnd, NULL, wc.hInstance, NULL);
 
-	// Adicionar barra de rolagem ao controle de texto
-	SetWindowLongPtr(thread_args->text_hwnd, GWL_STYLE,
-		GetWindowLongPtr(thread_args->text_hwnd, GWL_STYLE) | WS_VSCROLL);
+		// Adicionar barra de rolagem ao controle de texto
+		SetWindowLongPtr(thread_args->text_hwnd, GWL_STYLE,
+			GetWindowLongPtr(thread_args->text_hwnd, GWL_STYLE) | WS_VSCROLL);
 
-	// Mostrar a janela
-	ShowWindow(thread_args->hwnd, SW_SHOW);
+		// Mostrar a janela
+		ShowWindow(thread_args->hwnd, SW_SHOW);
 
-	// Ajustar o tamanho do controle de texto para incluir a barra de rolagem
-	RECT client_rect;
-	GetClientRect(thread_args->hwnd, &client_rect);
-	int text_width = client_rect.right - client_rect.left;
-	int text_height = client_rect.bottom - client_rect.top;
-	int scrollbar_width = GetSystemMetrics(SM_CXVSCROLL);
-	SetWindowPos(thread_args->text_hwnd, NULL, 0, 0, text_width - scrollbar_width, text_height, SWP_NOMOVE | SWP_NOZORDER);
+		// Ajustar o tamanho do controle de texto para incluir a barra de rolagem
+		RECT client_rect;
+		GetClientRect(thread_args->hwnd, &client_rect);
+		int text_width = client_rect.right - client_rect.left;
+		int text_height = client_rect.bottom - client_rect.top;
+		int scrollbar_width = GetSystemMetrics(SM_CXVSCROLL);
+		SetWindowPos(thread_args->text_hwnd, NULL, 0, 0, text_width - scrollbar_width, text_height, SWP_NOMOVE | SWP_NOZORDER);
+	}
 }
 
 // Função para escrever uma linha na janela com limite de linhas
@@ -894,24 +1001,6 @@ void writeLineToWindow(HWND text_hwnd, const char* line)
 
 	// Rolar a janela para exibir a última linha
 	SendMessageW(text_hwnd, EM_LINESCROLL, 0, 1);
-}
-
-
-// Função da thread
-void* thread_function(void* arg)
-{
-	pkg_thread_geradora_pt thread_args = (pkg_thread_geradora_pt)arg;
-
-	/*
-	for (int i = 1; i <= NUM_LINES; i++) {
-		char line[256];
-		sprintf__s(line, sizeof(line), "Thread %d - Linha %d", thread_args->thread_id, i);
-
-		writeLineToWindow(thread_args->text_hwnd, line);
-		Sleep(500);  // Aguardar 500ms
-	}
-	*/
-	return NULL;
 }
 
 // Função para configurar os argumentos da janela
