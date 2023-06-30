@@ -7,13 +7,9 @@
 #pragma warning(disable:6386)
 // https://learn.microsoft.com/pt-br/cpp/code-quality/c6386?view=msvc-170
 
-#define PDC_DLL_BUILD
-
 #include <pthread.h>
 #include <stdio.h>
-#include <Windows.h>
 #include <stdlib.h>
-#include <math.h>
 #include <semaphore.h>
 
 /*
