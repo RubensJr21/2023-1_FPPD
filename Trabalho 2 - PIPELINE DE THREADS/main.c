@@ -181,7 +181,7 @@ cell_of_number_to_verify_pt get_from_fila_buffer_IO(fila_buffer_IO_pt fila_in, i
 	return cabeca;
 }
 
-void insert_in_fila_buffer_IO(fila_buffer_IO_pt fila_out, cell_of_number_to_verify_pt cell, id_t id, bool_t eh_ultimo)
+void insert_in_fila_buffer_IO(fila_buffer_IO_pt fila_out, cell_of_number_to_verify_pt cell, id_t id)
 {
 	int o;
 	sem_getvalue(fila_out->sem_vazio, &o);
@@ -367,38 +367,16 @@ typedef struct BUFFER_IO{
 	pkg_number_to_veriry_pt ultimo_inserido;*/
 }buffer_IO_t, * buffer_IO_pt;
 
-void insert_in_buffer_IO(buffer_IO_pt buffer_out, pkg_number_to_veriry_pt ntv, id_t id, bool_t eh_ultimo)
+void insert_in_buffer_IO(buffer_IO_pt buffer_out, pkg_number_to_veriry_pt ntv, id_t id)
 {
 	/// *** INSERT ***
 	// ESCREVE NA POSIÇÃO
-	insert_in_fila_buffer_IO(buffer_out->buffer, create_cell_of_number_to_verify(ntv), id, eh_ultimo);
+	insert_in_fila_buffer_IO(buffer_out->buffer, create_cell_of_number_to_verify(ntv), id);
 }
 
 pkg_number_to_veriry_pt get_from_buffer_IO(buffer_IO_pt buffer_in, id_t id)
 {
 	return get_from_fila_buffer_IO(buffer_in->buffer, id)->atual;
-}
-
-void printf_buffer_IO(id_t id, buffer_IO_pt buffer, int index, const char* function)
-{
-	char buffer_string[5000];
-	int i;
-	int escreveu_ate = sprintf_s(buffer_string, 5000, "%s::BUFFER THREAD #%d (pos atual: %d): ", function, id, index);
-	int qtd_chars = buffer->max_size_buffer * 2;
-	int tamanho_total = escreveu_ate + qtd_chars;
-	sem_wait(buffer->buffer->sem_mutex);
-	for (i = 0; i < buffer->max_size_buffer; i++)
-	{
-		cell_of_number_to_verify_pt contv = buffer->buffer->head;
-		if (contv)
-		{
-			escreveu_ate += sprintf_s(buffer_string + escreveu_ate, 5000 - escreveu_ate, "%lld,", contv->atual->number);
-			buffer->buffer->head = buffer->buffer->head->proximo;
-		}
-	}
-	sem_post(buffer->buffer->sem_mutex);
-
-	printf(buffer_string);
 }
 
 buffer_IO_pt create_buffer_IO(int max_size_buffer)
@@ -443,8 +421,6 @@ pkg_thread_geradora_pt create_pkg_thread_geradora(id_t id, int size_buffer, int 
 	tg->buffer_resultados = buffer_resultados;
 	return tg;
 }
-
-void printf_buffer_IO(id_t id, buffer_IO_pt buffer, int index, const char* function);
 
 void* thread_geradora(void* args)
 {
@@ -499,7 +475,6 @@ condicao_de_parada_threads_processamento_pt create_condicao_de_parada_threads_pr
 	return cptp;
 }
 
-
 typedef struct PKG_THREAD_SIEVE_PROCESSAMENTO{
 	id_t id;
 	buffer_IO_pt buffer_in; // tamanho K
@@ -507,14 +482,11 @@ typedef struct PKG_THREAD_SIEVE_PROCESSAMENTO{
 	buffer_resultados_pt buffer_resultados;
 	int size_buffer_internal; // valor do X
 
-	bool_t eh_ultimo;
-
 	sem_t* sem_end_process;
-
 	condicao_de_parada_threads_processamento_pt condicao_parada;
 }pkg_thread_sieve_processamento_t, * pkg_thread_sieve_processamento_pt;
 
-pkg_thread_sieve_processamento_pt create_pkg_thread_sieve_processamento(id_t id, buffer_IO_pt buffer_in, buffer_IO_pt buffer_out, int buffer_size_internal, buffer_resultados_pt buffer_resultados, bool_t eh_ultimo, sem_t* sem_end_process, condicao_de_parada_threads_processamento_pt cptp)
+pkg_thread_sieve_processamento_pt create_pkg_thread_sieve_processamento(id_t id, buffer_IO_pt buffer_in, buffer_IO_pt buffer_out, int buffer_size_internal, buffer_resultados_pt buffer_resultados, sem_t* sem_end_process, condicao_de_parada_threads_processamento_pt cptp)
 {
 	pkg_thread_sieve_processamento_pt tsp = malloc(sizeof(pkg_thread_sieve_processamento_t));
 	tsp->id = id;
@@ -522,7 +494,6 @@ pkg_thread_sieve_processamento_pt create_pkg_thread_sieve_processamento(id_t id,
 	tsp->buffer_out = buffer_out;
 	tsp->buffer_resultados = buffer_resultados;
 	tsp->size_buffer_internal = buffer_size_internal;
-	tsp->eh_ultimo = eh_ultimo;
 	tsp->sem_end_process = sem_end_process;
 	tsp->condicao_parada = cptp;
 	return tsp;
@@ -548,7 +519,6 @@ void* thread_sieve_processamento(void* args)
 	// verifica por meio de um mutex se deve continuar ou não
 	// Vai recever um atributo que indica se precisa continuar ou não
 	// Isso servirá para que todos parém "ao mesmo tempo" e não imprimam mais nada
-	//
 	condicao_de_parada_threads_processamento_pt condicao_parada = pkg->condicao_parada;
 	pthread_mutex_lock(condicao_parada->mutex);
 	while (condicao_parada->deve_continuar)
@@ -611,7 +581,7 @@ void* thread_sieve_processamento(void* args)
 
 				// *** INSERT ***
 				// printf(ANSI_COLOR_BLUE "THREAD #%d => VAI TENTAR INSERIR no buffer_out(%p)\n" ANSI_COLOR_RESET, pkg->id, buffer_out);
-				insert_in_buffer_IO(buffer_out, ntv, pkg->id, pkg->eh_ultimo);
+				insert_in_buffer_IO(buffer_out, ntv, pkg->id);
 				// *** FIM DO INSERT ***
 			}
 			else
