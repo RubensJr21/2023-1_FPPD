@@ -566,6 +566,10 @@ void* thread_resultado(void* args)
 
 int main(int argc, char* argv[])
 {
+	if (argc != 5)
+	{
+		return 0;
+	}
 	pthread_t t_geradora, t_resultado;
 
 	pthread_t* ts_sieves_processamento;
@@ -578,15 +582,10 @@ int main(int argc, char* argv[])
 		X : tamanho do buffer de primos das threads de processamento
 		buffer interno(que guarda os numeros primos)
 	*/
-	// N
-	int numero_a_serem_testados = 1000;
-	// M
-	int qtd_de_threads_de_processamento = 3;
-	// K
-	int max_size_comunication_buffer = 10;
-	// X
-	int max_size_internal_buffer = 50;
-	
+	// N                               	         // M                                             // K                                          // X
+	//int numero_a_serem_testados = 1000,          qtd_de_threads_de_processamento = 3,             max_size_comunication_buffer = 10,            max_size_internal_buffer = 50;
+	int numero_a_serem_testados = atoi(argv[1]), qtd_de_threads_de_processamento = atoi(argv[2]), max_size_comunication_buffer = atoi(argv[3]), max_size_internal_buffer = atoi(argv[4]);
+
 	// CRIAÇÃO DOS CONTROLES DE ENCERRAMENTO DO PROGRAMA
 	end_main_pt end_main = create_end_main();
 	sem_t sem_end_process;
