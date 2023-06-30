@@ -41,16 +41,6 @@
 
 */
 
-// https://medium.com/@selvarajk/adding-color-to-your-output-from-c-58f1a4dc4e75
-
-#define ANSI_COLOR_RED     	 "\033[0;31m" //cores em ANSI utilizadas 
-#define ANSI_COLOR_GREEN	 "\033[0;32m"
-#define ANSI_COLOR_YELLOW    "\033[0;33m"
-#define ANSI_COLOR_BLUE      "\033[0;34m"
-#define ANSI_COLOR_PURPLE    "\033[0;35m"
-#define ANSI_COLOR_CYAN      "\033[0;36m"
-#define ANSI_COLOR_RESET     "\x1b[0m"
-
 #define id_t int
 #define bignumber_t long long
 #define primo_t long long
@@ -485,7 +475,7 @@ void* thread_sieve_processamento(void* args)
 			pthread_mutex_lock(condicao_parada->mutex);
 			condicao_parada->deve_continuar = FALSE;
 			pthread_mutex_unlock(condicao_parada->mutex);
-			printf(ANSI_COLOR_RED "%lld CAUSED INTERNAL BUFFER OVERFLOW IN thread %d at round %d\n" ANSI_COLOR_RESET, ntv->number, pkg->id, ntv->round);
+			printf("%lld CAUSED INTERNAL BUFFER OVERFLOW IN thread %d at round %d\n", ntv->number, pkg->id, ntv->round);
 			break;
 		}
 		// Caso 0
@@ -559,11 +549,11 @@ void* thread_resultado(void* args)
 
 		if (ntv->eh_primo)
 		{
-			 printf(ANSI_COLOR_GREEN "%lld is prime in thread %d at round %d\n" ANSI_COLOR_RESET, ntv->number, ntv->id_Thread_que_resolveu, ntv->round);
+			 printf("%lld is prime in thread %d at round %d\n", ntv->number, ntv->id_Thread_que_resolveu, ntv->round);
 		}
 		else
 		{
-			 printf(ANSI_COLOR_RED "%lld divided by %lld in thread %d at round %d\n" ANSI_COLOR_RESET, ntv->number, ntv->divided_number, ntv->id_Thread_que_resolveu, ntv->round);
+			 printf("%lld divided by %lld in thread %d at round %d\n", ntv->number, ntv->divided_number, ntv->id_Thread_que_resolveu, ntv->round);
 		}
 		if (sem_trywait(pkg->end_process) == 0)
 		{
