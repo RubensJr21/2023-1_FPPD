@@ -5,7 +5,6 @@
 #pragma warning(disable:6011)
 #pragma warning(disable:6001)
 #pragma warning(disable:6386)
-//#pragma warning(disable:28182)
 // https://learn.microsoft.com/pt-br/cpp/code-quality/c6386?view=msvc-170
 
 #define PDC_DLL_BUILD
@@ -57,8 +56,6 @@
 #define ANSI_COLOR_RESET     "\x1b[0m"
 
 #define id_t int
-//#define buffer_primos_pt long long*
-//#define bignumber_t long long
 #define bignumber_t long long
 #define primo_t long long
 #define round_t int
@@ -279,7 +276,6 @@ int insert_in_buffer_resultados(buffer_resultados_pt buffer_resultados, pkg_numb
 {
 	pthread_mutex_lock(buffer_resultados->mutex);
 	buffer_resultados->buffer[ntv->number - 2] = ntv;
-	//printf("Número %lld foi inserido no buffer resultados\n", ntv->number);
 	pthread_mutex_unlock(buffer_resultados->mutex);
 	return INSERT_IN_BUFFER_RESULTADOS_SUCESSO;
 }
@@ -333,7 +329,6 @@ primo_t get_number_from_buffer_internal_primos(buffer_de_primos_pt buffer_primos
 	{
 		return -2;
 	}
-	//printf(text_hwnd, "get_number_from_buffer_internal_primos::buffer_primos->buffer => %p\n", buffer_primos->buffer);
 
 	pkg_number_to_veriry_pt number_to_verify = buffer_primos->buffer[index];
 
@@ -433,8 +428,6 @@ void* thread_geradora(void* args)
 
 	while (numeros_gerados < pkg->numeros_a_serem_gerados)
 	{
-		//printf("thread_geradora::numero gerado: %lld\n", number);
-		//printf(ANSI_COLOR_YELLOW "THREAD #%d VAI TENTAR escrver %lld na fila(%p)\n" ANSI_COLOR_RESET, id, cell->atual->number, fila);
 		fila_buffer_IO_pt fila_out = buffer_out->buffer;
 		cell_of_number_to_verify_pt cell = create_cell_of_number_to_verify(ntv);
 
@@ -566,7 +559,6 @@ void* thread_sieve_processamento(void* args)
 			{
 				update_round(ntv);
 
-				// printf(ANSI_COLOR_BLUE "THREAD #%d => VAI TENTAR INSERIR no buffer_out(%p)\n" ANSI_COLOR_RESET, pkg->id, buffer_out);
 				insert_in_buffer_IO(buffer_out, ntv, pkg->id);
 				}
 			else
@@ -574,9 +566,6 @@ void* thread_sieve_processamento(void* args)
 				ntv->id_Thread_que_resolveu = pkg->id;
 				ntv->eh_primo = FALSE;
 				ntv->divided_number = numero_do_vetor_de_primos;
-				//if (DEBUG_PRINTS) printf("process_number::numero %lld foi verificado como NAO PRIMO na Thread #%d e ROUND #%d\n", ntv->number, pkg->id, ntv->round);
-				//printf(ANSI_COLOR_BLUE "thread_sieve_processamento::THREAD #%d vai inserir numero: %lld no buffer_resultados\n" ANSI_COLOR_RESET, pkg->id, ntv->number);
-				//int resultado = insert_in_buffer_resultados(pkg->buffer_resultados, ntv, pkg->id);
 				// enviar para thread resultado
 				sem_post(ntv->sem_pode_imprimir);
 			}
@@ -685,7 +674,7 @@ int main(int argc, char* argv[])
 	id_t id;
 
 
-	for (id = 0; id < qtd_de_threads_de_processamento - 1; id++) // id <= total_threads - 2 para parar na última e ser criada manualmente
+	for (id = 0; id < qtd_de_threads_de_processamento - 1; id++) // id <= qtd_de_threads_de_processamento - 1 para parar na última e ser criada manualmente
 	{
 		pkgs_tsp[id] = create_pkg_thread_sieve_processamento(id + 2, buffer_in_tsp, buffer_out_tsp, max_size_internal_buffer, buffer_resultados_numeros_primos, &sem_end_process, cptp);
 
