@@ -64,23 +64,6 @@
 #define FALSE 0
 #define bool_t int
 
-#define DEBUG_PRINTS TRUE
-#define DEBUG_GERADORA FALSE
-#define DEBUG_SIEVE_PROCESSAMENTO FALSE
-#define DEBUG_RESULTADOS FALSE
-#define PRINT_MUTEXES FALSE
-#define PRINT_UPDATE_ROUND FALSE
-#define PRINT_NUM_GERADO FALSE
-#define PRINT_SEMAFOROS FALSE
-#define PRINT_LIBERAR_POSICAO FALSE
-#define PRINT_BUFFER FALSE
-
-#define DEBUG_LEITURA FALSE
-#define DEBUG_ESCRITA FALSE
-
-#define OUTRA_ABORDAGEM_FILA FALSE
-
-
 typedef struct PKG_NUMBER_TO_VERIFY{
 	bignumber_t number;
 	round_t round;
@@ -138,11 +121,9 @@ cell_of_number_to_verify_pt get_from_fila_buffer_IO(fila_buffer_IO_pt fila_in, i
 	cell_of_number_to_verify_pt cabeca;
 	int o;
 	sem_getvalue(fila_in->sem_cheio, &o);
-	if (DEBUG_LEITURA) printf(ANSI_COLOR_GREEN "THREAD #%d VAI TENTAR ler na fila_in(%p)\ncheio = %d\n" ANSI_COLOR_RESET, id, fila_in, o);
 	sem_wait(fila_in->sem_cheio);
 	sem_wait(fila_in->sem_mutex);
 	sem_getvalue(fila_in->sem_cheio, &o);
-	if (DEBUG_LEITURA) printf(ANSI_COLOR_BLUE "THREAD #%d VAI CONSEGUIR ler na fila_in(%p)\ncheio = %d\n" ANSI_COLOR_RESET, id, fila_in, o);
 
 	cabeca = fila_in->head;
 
@@ -158,7 +139,6 @@ cell_of_number_to_verify_pt get_from_fila_buffer_IO(fila_buffer_IO_pt fila_in, i
 	sem_post(fila_in->sem_vazio);
 
 	sem_getvalue(fila_in->sem_vazio, &o);
-	if (DEBUG_LEITURA) printf(ANSI_COLOR_BLUE "THREAD #%d CONSEGUIU ler %lld na fila_in(%p)\nvazio = %d\n" ANSI_COLOR_RESET, id, cabeca->atual->number, fila_in, o);
 
 	return cabeca;
 }
@@ -167,11 +147,9 @@ void insert_in_fila_buffer_IO(fila_buffer_IO_pt fila_out, cell_of_number_to_veri
 {
 	int o;
 	sem_getvalue(fila_out->sem_vazio, &o);
-	if (DEBUG_ESCRITA) printf(ANSI_COLOR_YELLOW "THREAD #%d VAI TENTAR escrver %lld na fila_out(%p)\nvazio = %d\n" ANSI_COLOR_RESET, id, cell->atual->number, fila_out, o);
 	sem_wait(fila_out->sem_vazio);
 	sem_wait(fila_out->sem_mutex);
 	sem_getvalue(fila_out->sem_vazio, &o);
-	if (DEBUG_ESCRITA) printf(ANSI_COLOR_RED "THREAD #%d VAI CONSEGUIR escrver %lld na fila_out(%p)\nvazio = %d\n" ANSI_COLOR_RESET, id, cell->atual->number, fila_out, o);
 
 	if (fila_out->head == NULL)
 	{
@@ -188,19 +166,15 @@ void insert_in_fila_buffer_IO(fila_buffer_IO_pt fila_out, cell_of_number_to_veri
 	sem_post(fila_out->sem_cheio);
 
 	sem_getvalue(fila_out->sem_cheio, &o);
-
-	if (DEBUG_ESCRITA) printf(ANSI_COLOR_RED "THREAD #%d CONSEGUIU escrver %lld na fila(%p)\ncheio = %d\n" ANSI_COLOR_RESET, id, cell->atual->number, fila_out, o);
 }
 
 bool_t insert_in_fila_buffer_IO_GERADORA(fila_buffer_IO_pt fila_out, cell_of_number_to_verify_pt cell, id_t id)
 {
 	int o;
 	sem_getvalue(fila_out->sem_vazio, &o);
-	if (DEBUG_ESCRITA) printf(ANSI_COLOR_YELLOW "THREAD #%d VAI TENTAR escrver %lld na fila_out(%p)\nvazio = %d\n" ANSI_COLOR_RESET, id, cell->atual->number, fila_out, o);
 	sem_wait(fila_out->sem_vazio);
 	sem_wait(fila_out->sem_mutex);
 	sem_getvalue(fila_out->sem_vazio, &o);
-	if (DEBUG_ESCRITA) printf(ANSI_COLOR_RED "THREAD #%d VAI CONSEGUIR escrver %lld na fila_out(%p)\nvazio = %d\n" ANSI_COLOR_RESET, id, cell->atual->number, fila_out, o);
 
 
 	if (fila_out->current_size + 2 >= fila_out->max_size) // verifica se a Thread geradora vai encher a fila
@@ -226,7 +200,6 @@ bool_t insert_in_fila_buffer_IO_GERADORA(fila_buffer_IO_pt fila_out, cell_of_num
 
 	sem_getvalue(fila_out->sem_cheio, &o);
 
-	if (DEBUG_ESCRITA) printf(ANSI_COLOR_RED "THREAD #%d CONSEGUIU escrver %lld na fila_out(%p)\ncheio = %d\n" ANSI_COLOR_RESET, id, cell->atual->number, fila_out, o);
 	return TRUE;
 }
 
@@ -268,13 +241,9 @@ int insert_in_buffer_resultados(buffer_resultados_pt buffer_resultados, pkg_numb
 pkg_number_to_veriry_pt get_from_buffer_resultados(buffer_resultados_pt buffer_resultados, int index, id_t thread_id)
 {
 	pkg_number_to_veriry_pt ntv;
-	if (DEBUG_PRINTS && DEBUG_RESULTADOS)  printf(ANSI_COLOR_BLUE "thread_resultado::VAI LOCKAR buffer_resultados->mutex\n" ANSI_COLOR_RESET);
 	pthread_mutex_lock(buffer_resultados->mutex);
-	if (DEBUG_PRINTS && DEBUG_RESULTADOS)  printf(ANSI_COLOR_BLUE "thread_resultado::LOCKOU buffer_resultados->mutex\n" ANSI_COLOR_RESET);
 	ntv = buffer_resultados->buffer[index];
-	if (DEBUG_PRINTS && DEBUG_RESULTADOS)  printf(ANSI_COLOR_BLUE "thread_resultado::VAI DELOCKAR buffer_resultados->mutex\n" ANSI_COLOR_RESET);
 	pthread_mutex_unlock(buffer_resultados->mutex);
-	if (DEBUG_PRINTS && DEBUG_RESULTADOS)  printf(ANSI_COLOR_BLUE "thread_resultado::DELOCKOU buffer_resultados->mutex\n" ANSI_COLOR_RESET);
 	return ntv;
 }
 
@@ -470,7 +439,6 @@ pkg_thread_sieve_processamento_pt create_pkg_thread_sieve_processamento(id_t id,
 
 void update_round(pkg_number_to_veriry_pt number_to_verify)
 {
-	if (DEBUG_PRINTS && PRINT_UPDATE_ROUND) printf("update_round::ATUALIZA ROUND do number: %lld\n", number_to_verify->number);
 	// incrementa number_to_verify->contador
 	number_to_verify->contador++;
 	// atualiza o number_to_verify->round
@@ -581,7 +549,6 @@ pkg_thread_resultado_pt create_pkg_thread_resultado(id_t id, int size_buffer_res
 
 void* thread_resultado(void* args)
 {
-	if (DEBUG_PRINTS && DEBUG_RESULTADOS) printf("Entrou na Thread de Resultados\n");
 	pkg_thread_resultado_pt pkg = (pkg_thread_resultado_pt) args;
 	buffer_resultados_pt buffer_resultados = pkg->buffer_resultados;
 	pkg_number_to_veriry_pt ntv;
