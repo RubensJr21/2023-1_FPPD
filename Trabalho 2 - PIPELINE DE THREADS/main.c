@@ -113,21 +113,6 @@ typedef struct FILA_BUFFER_IO {
 	sem_t* sem_cheio;
 	int max_size;
 	int current_size;
-
-	/// OUTRA ABORDAGEM
-
-	// pthread_mutex_t* mutex;
-	// pthread_cond_t* cond_alguem_retirou;
-	// pthread_cond_t* cond_alguem_inseriu;
-
-	// correção de dead_lock
-	// Caso onde a última thread esperará para escrever e nunca obterá espaço
-	// escreve em um lugar que evitará que fique preso
-	// na prática, "deixa um espaço" de prevenção
-
-	// cell_of_number_to_verify_pt prevent_deadlock;
-	// pthread_mutex_t* mutex_prevent_deadlock;
-
 } fila_buffer_IO_t, *fila_buffer_IO_pt;
 
 fila_buffer_IO_pt create_fila_buffer_IO(int max_size_buffer)
@@ -448,7 +433,7 @@ void* thread_geradora(void* args)
 typedef struct CONDICAO_DE_PARADA_THREADS_PROCESSAMENTO {
 	pthread_mutex_t* mutex;
 	bool_t deve_continuar;
-} condicao_de_parada_threads_processamento_t, * condicao_de_parada_threads_processamento_pt;
+} condicao_de_parada_threads_processamento_t, *condicao_de_parada_threads_processamento_pt;
 
 condicao_de_parada_threads_processamento_pt create_condicao_de_parada_threads_processamento()
 {
