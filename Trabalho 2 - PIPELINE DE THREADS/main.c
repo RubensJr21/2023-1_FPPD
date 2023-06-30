@@ -142,7 +142,7 @@ fila_buffer_IO_pt create_fila_buffer_IO(int max_size_buffer)
 	fbIO->sem_mutex = malloc(sizeof(sem_t));
 	sem_init(fbIO->sem_mutex, 0, 1);
 	fbIO->sem_vazio = malloc(sizeof(sem_t));
-	sem_init(fbIO->sem_vazio, 0, max_size_buffer - 1); // Começa com todas as posições livres para escrita
+	sem_init(fbIO->sem_vazio, 0, max_size_buffer); // Começa com todas as posições livres para escrita
 	fbIO->sem_cheio = malloc(sizeof(sem_t));
 	sem_init(fbIO->sem_cheio, 0, 0); // Começa com nenhuma posição livre para leitura
 	
@@ -323,7 +323,6 @@ typedef struct BUFFER_DE_PRIMOS{
 
 void insert_in_buffer_internal_primos(buffer_de_primos_pt buffer_primos, pkg_number_to_veriry_pt number_to_verify, int id)
 {
-	// envia o número para a primeira thread de processamento
 	buffer_primos->buffer[number_to_verify->round] = number_to_verify;
 }
 
@@ -363,14 +362,10 @@ buffer_de_primos_pt create_buffer_internal_primos(int max_size_buffer)
 typedef struct BUFFER_IO{
 	fila_buffer_IO_pt buffer;
 	int max_size_buffer;
-	/*pkg_number_to_veriry_pt ultimo_lido;
-	pkg_number_to_veriry_pt ultimo_inserido;*/
 }buffer_IO_t, * buffer_IO_pt;
 
 void insert_in_buffer_IO(buffer_IO_pt buffer_out, pkg_number_to_veriry_pt ntv, id_t id)
 {
-	/// *** INSERT ***
-	// ESCREVE NA POSIÇÃO
 	insert_in_fila_buffer_IO(buffer_out->buffer, create_cell_of_number_to_verify(ntv), id);
 }
 
@@ -439,8 +434,6 @@ void* thread_geradora(void* args)
 	while (numeros_gerados < pkg->numeros_a_serem_gerados)
 	{
 		//printf("thread_geradora::numero gerado: %lld\n", number);
-		
-		// *** INSERT ***
 		//printf(ANSI_COLOR_YELLOW "THREAD #%d VAI TENTAR escrver %lld na fila(%p)\n" ANSI_COLOR_RESET, id, cell->atual->number, fila);
 		fila_buffer_IO_pt fila_out = buffer_out->buffer;
 		cell_of_number_to_verify_pt cell = create_cell_of_number_to_verify(ntv);
@@ -455,8 +448,6 @@ void* thread_geradora(void* args)
 			insert_in_buffer_resultados(pkg->buffer_resultados, ntv, pkg->id);
 			sem_post(pkg->buffer_resultados->sem); // garante que a thread resultado tenha o number_to_verify (ntv) para ler	
 		}
-
-		/// *** FIM INSERT ***
 	}
 	return NULL;
 }
@@ -534,10 +525,8 @@ void* thread_sieve_processamento(void* args)
 			2. Não ser primo
 				2.1: Descartar o número, pegando o próximo do buffer
 		*/
-
-		/// *** GET ***
+		
 		ntv = get_from_buffer_IO(buffer_in, pkg->id);
-		/// *** FIM DO GET ***
 				
 		// obtém número primo que tentará dividir o ntv
 
@@ -554,14 +543,12 @@ void* thread_sieve_processamento(void* args)
 			pthread_mutex_lock(condicao_parada->mutex);
 			condicao_parada->deve_continuar = FALSE;
 			pthread_mutex_unlock(condicao_parada->mutex);
-			// impressao de overBUFFER
 			printf(ANSI_COLOR_RED "%lld CAUSED INTERNAL BUFFER OVERFLOW IN thread %d at round %d\n" ANSI_COLOR_RESET, ntv->number, pkg->id, ntv->round);
 			break;
 		}
 		// Caso 0
 		else if (numero_do_vetor_de_primos == -1)
 		{
-			// insere número
 			ntv->id_Thread_que_resolveu = pkg->id;
 			ntv->eh_primo = TRUE;
 			insert_in_buffer_internal_primos(buffer_primos, ntv, pkg->id);
@@ -579,20 +566,18 @@ void* thread_sieve_processamento(void* args)
 			{
 				update_round(ntv);
 
-				// *** INSERT ***
 				// printf(ANSI_COLOR_BLUE "THREAD #%d => VAI TENTAR INSERIR no buffer_out(%p)\n" ANSI_COLOR_RESET, pkg->id, buffer_out);
 				insert_in_buffer_IO(buffer_out, ntv, pkg->id);
-				// *** FIM DO INSERT ***
-			}
+				}
 			else
 			{
 				ntv->id_Thread_que_resolveu = pkg->id;
 				ntv->eh_primo = FALSE;
 				ntv->divided_number = numero_do_vetor_de_primos;
 				//if (DEBUG_PRINTS) printf("process_number::numero %lld foi verificado como NAO PRIMO na Thread #%d e ROUND #%d\n", ntv->number, pkg->id, ntv->round);
-				// enviar para thread resultado
 				//printf(ANSI_COLOR_BLUE "thread_sieve_processamento::THREAD #%d vai inserir numero: %lld no buffer_resultados\n" ANSI_COLOR_RESET, pkg->id, ntv->number);
 				//int resultado = insert_in_buffer_resultados(pkg->buffer_resultados, ntv, pkg->id);
+				// enviar para thread resultado
 				sem_post(ntv->sem_pode_imprimir);
 			}
 		}
@@ -618,30 +603,6 @@ pkg_thread_resultado_pt create_pkg_thread_resultado(id_t id, int size_buffer_res
 	tr->end_main = end_main;
 	tr->condicao_de_parada_thread_processamento = cptp;
 	return tr;
-}
-
-void printf_buffer_resultados(buffer_resultados_pt buffer)
-{
-	#define SIZE_BUFFER_STRING 10000
-	char buffer_string[SIZE_BUFFER_STRING];
-	int i;
-	int escreveu_ate = sprintf_s(buffer_string, SIZE_BUFFER_STRING, "thread_resultado::BUFFER RESULTADOS: ");
-	int qtd_chars = buffer->max_size_buffer * 2;
-	int tamanho_total = escreveu_ate + qtd_chars;
-	for (i = 0; i < buffer->max_size_buffer; i++)
-	{
-		if (buffer->buffer[i] != NULL)
-		{
-			escreveu_ate += sprintf_s(buffer_string + escreveu_ate, SIZE_BUFFER_STRING - escreveu_ate, "%lld(%d),", buffer->buffer[i]->number, i);
-		}
-		else
-		{
-			escreveu_ate += sprintf_s(buffer_string + escreveu_ate, SIZE_BUFFER_STRING - escreveu_ate, "NULL(%d),", i);
-		}
-	}
-	escreveu_ate += sprintf_s(buffer_string + escreveu_ate, SIZE_BUFFER_STRING - escreveu_ate, " => FIM VETOR\n");
-
-	printf(buffer_string);
 }
 
 void* thread_resultado(void* args)
@@ -699,11 +660,12 @@ int main(int argc, char* argv[])
 	// X
 	int max_size_internal_buffer = 50;
 	
-	// CONTROLE DE ENCERRAMENTO DO PROGRAMA
+	// CRIAÇÃO DOS CONTROLES DE ENCERRAMENTO DO PROGRAMA
 	end_main_pt end_main = create_end_main();
 	sem_t sem_end_process;
 	sem_init(&sem_end_process, 0, 0);
 	condicao_de_parada_threads_processamento_pt cptp = create_condicao_de_parada_threads_processamento();
+	// FIM CRIAÇÃO DOS CONTROLES DE ENCERRAMENTO DO PROGRAMA
 
 	pkg_thread_resultado_pt pkg_tr = create_pkg_thread_resultado(1, numero_a_serem_testados, &sem_end_process, end_main, cptp);
 	buffer_resultados_pt buffer_resultados_numeros_primos = pkg_tr->buffer_resultados;
@@ -725,14 +687,14 @@ int main(int argc, char* argv[])
 
 	for (id = 0; id < qtd_de_threads_de_processamento - 1; id++) // id <= total_threads - 2 para parar na última e ser criada manualmente
 	{
-		pkgs_tsp[id] = create_pkg_thread_sieve_processamento(id + 2, buffer_in_tsp, buffer_out_tsp, max_size_internal_buffer, buffer_resultados_numeros_primos, FALSE, &sem_end_process, cptp);
+		pkgs_tsp[id] = create_pkg_thread_sieve_processamento(id + 2, buffer_in_tsp, buffer_out_tsp, max_size_internal_buffer, buffer_resultados_numeros_primos, &sem_end_process, cptp);
 
 		buffer_in_tsp = buffer_out_tsp;
 		buffer_out_tsp = create_buffer_IO(max_size_comunication_buffer);
 	}
 
 	buffer_out_tsp = buffer_out_geradora;
-	pkgs_tsp[id] = create_pkg_thread_sieve_processamento(id + 2, buffer_in_tsp, buffer_out_tsp, max_size_internal_buffer, buffer_resultados_numeros_primos, TRUE, &sem_end_process, cptp);
+	pkgs_tsp[id] = create_pkg_thread_sieve_processamento(id + 2, buffer_in_tsp, buffer_out_tsp, max_size_internal_buffer, buffer_resultados_numeros_primos, &sem_end_process, cptp);
 
 	for (id = 0; id < qtd_de_threads_de_processamento; id++)
 	{
