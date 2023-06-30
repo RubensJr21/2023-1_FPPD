@@ -119,17 +119,17 @@ typedef struct FILA_BUFFER_IO {
 
 	/// OUTRA ABORDAGEM
 
-	pthread_mutex_t* mutex;
-	pthread_cond_t* cond_alguem_retirou;
-	pthread_cond_t* cond_alguem_inseriu;
+	// pthread_mutex_t* mutex;
+	// pthread_cond_t* cond_alguem_retirou;
+	// pthread_cond_t* cond_alguem_inseriu;
 
 	// correção de dead_lock
 	// Caso onde a última thread esperará para escrever e nunca obterá espaço
 	// escreve em um lugar que evitará que fique preso
 	// na prática, "deixa um espaço" de prevenção
 
-	cell_of_number_to_verify_pt prevent_deadlock;
-	pthread_mutex_t* mutex_prevent_deadlock;
+	// cell_of_number_to_verify_pt prevent_deadlock;
+	// pthread_mutex_t* mutex_prevent_deadlock;
 
 } fila_buffer_IO_t, *fila_buffer_IO_pt;
 
@@ -148,94 +148,48 @@ fila_buffer_IO_pt create_fila_buffer_IO(int max_size_buffer)
 	
 	fbIO->max_size = max_size_buffer;
 	fbIO->current_size = 0;
-
-	/// OUTRA ABORDAGEM
-
-	fbIO->mutex = malloc(sizeof(pthread_mutex_t));
-	pthread_mutex_init(fbIO->mutex, NULL);
-
-	fbIO->cond_alguem_retirou = malloc(sizeof(pthread_cond_t));
-	pthread_cond_init(fbIO->cond_alguem_retirou, NULL);
-	fbIO->cond_alguem_inseriu = malloc(sizeof(pthread_cond_t));
-	pthread_cond_init(fbIO->cond_alguem_inseriu, NULL);
-
-	fbIO->prevent_deadlock = NULL;
-	fbIO->mutex_prevent_deadlock = malloc(sizeof(pthread_mutex_t));
-	pthread_mutex_init(fbIO->mutex_prevent_deadlock, NULL);
-
 	return fbIO;
 }
 
 cell_of_number_to_verify_pt get_from_fila_buffer_IO(fila_buffer_IO_pt fila_in, id_t id)
 {
 	cell_of_number_to_verify_pt cabeca;
-	pthread_mutex_lock(fila_in->mutex);
-	while (fila_in->current_size <= 0)
-	{
-		if (DEBUG_ESCRITA) printf(ANSI_COLOR_YELLOW "THREAD #%d => fila_out(%p) vazia VAI ESPERAR para ler\n" ANSI_COLOR_RESET, id, fila_in);
-		pthread_cond_wait(fila_in->cond_alguem_inseriu, fila_in->mutex);
-		if (DEBUG_ESCRITA) printf(ANSI_COLOR_YELLOW "THREAD #%d => ESPEROU para ler, fila_out(%p) encheu\n" ANSI_COLOR_RESET, id, fila_in);
-	}
-
-	// consumir()
+	int o;
+	sem_getvalue(fila_in->sem_cheio, &o);
+	if (DEBUG_LEITURA) printf(ANSI_COLOR_GREEN "THREAD #%d VAI TENTAR ler na fila_in(%p)\ncheio = %d\n" ANSI_COLOR_RESET, id, fila_in, o);
+	sem_wait(fila_in->sem_cheio);
+	sem_wait(fila_in->sem_mutex);
+	sem_getvalue(fila_in->sem_cheio, &o);
+	if (DEBUG_LEITURA) printf(ANSI_COLOR_BLUE "THREAD #%d VAI CONSEGUIR ler na fila_in(%p)\ncheio = %d\n" ANSI_COLOR_RESET, id, fila_in, o);
 
 	cabeca = fila_in->head;
-	pthread_mutex_lock(fila_in->mutex_prevent_deadlock);
-	if (fila_in->prevent_deadlock != NULL)
-	{
-		if (fila_in->head == NULL)
-		{
-			fila_in->head = fila_in->last = fila_in->prevent_deadlock;
-		}
-		else
-		{
-			fila_in->last->proximo = fila_in->prevent_deadlock;
-			fila_in->last = fila_in->prevent_deadlock;
-		}
-		fila_in->prevent_deadlock = NULL;
-	}
-	else
-	{
-		if (fila_in->head == NULL)
-		{
-			fila_in->last = NULL;
-		}
-		fila_in->current_size--;
 
+	fila_in->head = fila_in->head->proximo;
+
+	if (fila_in->head == NULL)
+	{
+		fila_in->last = NULL;
 	}
-	pthread_mutex_unlock(fila_in->mutex_prevent_deadlock);
-	pthread_cond_signal(fila_in->cond_alguem_retirou);
-	pthread_mutex_unlock(fila_in->mutex);
+	fila_in->current_size--;
+
+	sem_post(fila_in->sem_mutex);
+	sem_post(fila_in->sem_vazio);
+
+	sem_getvalue(fila_in->sem_vazio, &o);
+	if (DEBUG_LEITURA) printf(ANSI_COLOR_BLUE "THREAD #%d CONSEGUIU ler %lld na fila_in(%p)\nvazio = %d\n" ANSI_COLOR_RESET, id, cabeca->atual->number, fila_in, o);
+
 	return cabeca;
 }
 
-bool_t insert_in_fila_buffer_IO(fila_buffer_IO_pt fila_out, cell_of_number_to_verify_pt cell, id_t id, bool_t eh_ultimo)
+void insert_in_fila_buffer_IO(fila_buffer_IO_pt fila_out, cell_of_number_to_verify_pt cell, id_t id, bool_t eh_ultimo)
 {
-	pthread_mutex_lock(fila_out->mutex);
-	
-	while (fila_out->current_size > fila_out->max_size)
-	{
-		if (DEBUG_ESCRITA) printf(ANSI_COLOR_YELLOW "THREAD #%d => fila_out(%p) cheia VAI ESPERAR para escrver\n" ANSI_COLOR_RESET, id, fila_out);
-		pthread_cond_wait(fila_out->cond_alguem_retirou, fila_out->mutex);
-		if (DEBUG_ESCRITA) printf(ANSI_COLOR_YELLOW "THREAD #%d => ESPEROU para escrver, fila_out(%p) esvaziou\n" ANSI_COLOR_RESET, id, fila_out);
-	}
-
-	// produzir()
-
-	// Preciso saber quem é o último
-	// verifica se vai causar deadlock
-	// ocorrerá deadlock caso o último queira escrever no primeiro
-	// mas o primeiro por encadeamento está esperando o último
-
-	if (eh_ultimo && fila_out->current_size + 1 >= fila_out->max_size)
-	{
-		pthread_mutex_lock(fila_out->mutex_prevent_deadlock);
-		fila_out->prevent_deadlock = cell;
-		pthread_mutex_unlock(fila_out->mutex_prevent_deadlock);
-		pthread_cond_signal(fila_out->cond_alguem_inseriu);
-		pthread_mutex_unlock(fila_out->mutex);
-		return TRUE;
-	}
+	int o;
+	sem_getvalue(fila_out->sem_vazio, &o);
+	if (DEBUG_ESCRITA) printf(ANSI_COLOR_YELLOW "THREAD #%d VAI TENTAR escrver %lld na fila_out(%p)\nvazio = %d\n" ANSI_COLOR_RESET, id, cell->atual->number, fila_out, o);
+	sem_wait(fila_out->sem_vazio);
+	sem_wait(fila_out->sem_mutex);
+	sem_getvalue(fila_out->sem_vazio, &o);
+	if (DEBUG_ESCRITA) printf(ANSI_COLOR_RED "THREAD #%d VAI CONSEGUIR escrver %lld na fila_out(%p)\nvazio = %d\n" ANSI_COLOR_RESET, id, cell->atual->number, fila_out, o);
 
 	if (fila_out->head == NULL)
 	{
@@ -248,33 +202,29 @@ bool_t insert_in_fila_buffer_IO(fila_buffer_IO_pt fila_out, cell_of_number_to_ve
 	}
 	fila_out->current_size++;
 
-	if (fila_out->current_size == fila_out->max_size)
-	{
-		if (DEBUG_ESCRITA) printf(ANSI_COLOR_PURPLE "THREAD #%d => encheu a fila_out(%p)\n" ANSI_COLOR_RESET, id, fila_out);
-	}
+	sem_post(fila_out->sem_mutex);
+	sem_post(fila_out->sem_cheio);
 
-	pthread_cond_signal(fila_out->cond_alguem_inseriu);
-	pthread_mutex_unlock(fila_out->mutex);
+	sem_getvalue(fila_out->sem_cheio, &o);
 
-	return TRUE;
+	if (DEBUG_ESCRITA) printf(ANSI_COLOR_RED "THREAD #%d CONSEGUIU escrver %lld na fila(%p)\ncheio = %d\n" ANSI_COLOR_RESET, id, cell->atual->number, fila_out, o);
 }
 
 bool_t insert_in_fila_buffer_IO_GERADORA(fila_buffer_IO_pt fila_out, cell_of_number_to_verify_pt cell, id_t id)
 {
-	pthread_mutex_lock(fila_out->mutex);
-	while (fila_out->current_size >= fila_out->max_size)
-	{
-		if (DEBUG_ESCRITA) printf(ANSI_COLOR_YELLOW "THREAD #%d => fila_out(%p) cheia VAI ESPERAR para escrver\n" ANSI_COLOR_RESET, id, fila_out);
-		pthread_cond_wait(fila_out->cond_alguem_retirou, fila_out->mutex);
-		if (DEBUG_ESCRITA) printf(ANSI_COLOR_YELLOW "THREAD #%d => ESPEROU para escrver, fila_out(%p) esvaziou\n" ANSI_COLOR_RESET, id, fila_out);
-	}
+	int o;
+	sem_getvalue(fila_out->sem_vazio, &o);
+	if (DEBUG_ESCRITA) printf(ANSI_COLOR_YELLOW "THREAD #%d VAI TENTAR escrver %lld na fila_out(%p)\nvazio = %d\n" ANSI_COLOR_RESET, id, cell->atual->number, fila_out, o);
+	sem_wait(fila_out->sem_vazio);
+	sem_wait(fila_out->sem_mutex);
+	sem_getvalue(fila_out->sem_vazio, &o);
+	if (DEBUG_ESCRITA) printf(ANSI_COLOR_RED "THREAD #%d VAI CONSEGUIR escrver %lld na fila_out(%p)\nvazio = %d\n" ANSI_COLOR_RESET, id, cell->atual->number, fila_out, o);
 
-	// produzir()
 
-	if (fila_out->current_size + 1 >= fila_out->max_size) // verifica se a Thread geradora vai encher a fila
+	if (fila_out->current_size + 2 >= fila_out->max_size) // verifica se a Thread geradora vai encher a fila
 	{
-		pthread_cond_signal(fila_out->cond_alguem_inseriu);
-		pthread_mutex_unlock(fila_out->mutex);
+		sem_post(fila_out->sem_mutex);
+		sem_post(fila_out->sem_vazio);
 		return FALSE;
 	}
 
@@ -289,15 +239,12 @@ bool_t insert_in_fila_buffer_IO_GERADORA(fila_buffer_IO_pt fila_out, cell_of_num
 	}
 	fila_out->current_size++;
 
+	sem_post(fila_out->sem_mutex);
+	sem_post(fila_out->sem_cheio);
 
-	if (fila_out->current_size == fila_out->max_size)
-	{
-		if (DEBUG_ESCRITA) printf(ANSI_COLOR_PURPLE "THREAD #%d => encheu a fila_out(%p)\n" ANSI_COLOR_RESET, id, fila_out);
-	}
+	sem_getvalue(fila_out->sem_cheio, &o);
 
-	pthread_cond_signal(fila_out->cond_alguem_inseriu);
-	pthread_mutex_unlock(fila_out->mutex);
-
+	if (DEBUG_ESCRITA) printf(ANSI_COLOR_RED "THREAD #%d CONSEGUIU escrver %lld na fila_out(%p)\ncheio = %d\n" ANSI_COLOR_RESET, id, cell->atual->number, fila_out, o);
 	return TRUE;
 }
 
@@ -355,11 +302,11 @@ buffer_resultados_pt create_buffer_resultados(int numeros_a_serem_calculados)
 	buffer_resultados_pt b = malloc(sizeof(buffer_resultados_t));
 	b->buffer = malloc(sizeof(pkg_number_to_veriry_pt) * numeros_a_serem_calculados - 2); // pois serão excluídos os números 0 e 1, e o processamento começará do 2
 	b->current_index = 0;
-	for (int index = 0; index < numeros_a_serem_calculados - 2; index++)
+	for (int index = 0; index < numeros_a_serem_calculados - 2; index++) // O - 2 é porque os números começam a serem calculados do 2, logo, pulando o 0 e o 1.
 	{
 		b->buffer[index] = NULL;
 	}
-	b->max_size_buffer = numeros_a_serem_calculados - 2;
+	b->max_size_buffer = numeros_a_serem_calculados - 2; // O - 2 é porque os números começam a serem calculados do 2, logo, pulando o 0 e o 1.
 	b->mutex = malloc(sizeof(pthread_mutex_t));
 	pthread_mutex_init(b->mutex, NULL);
 	b->sem = malloc(sizeof(sem_t));
@@ -416,15 +363,15 @@ buffer_de_primos_pt create_buffer_internal_primos(int max_size_buffer)
 typedef struct BUFFER_IO{
 	fila_buffer_IO_pt buffer;
 	int max_size_buffer;
-	pkg_number_to_veriry_pt ultimo_lido;
-	pkg_number_to_veriry_pt ultimo_inserido;
+	/*pkg_number_to_veriry_pt ultimo_lido;
+	pkg_number_to_veriry_pt ultimo_inserido;*/
 }buffer_IO_t, * buffer_IO_pt;
 
-bool_t insert_in_buffer_IO(buffer_IO_pt buffer_out, pkg_number_to_veriry_pt ntv, id_t id, bool_t eh_ultimo)
+void insert_in_buffer_IO(buffer_IO_pt buffer_out, pkg_number_to_veriry_pt ntv, id_t id, bool_t eh_ultimo)
 {
 	/// *** INSERT ***
 	// ESCREVE NA POSIÇÃO
-	return insert_in_fila_buffer_IO(buffer_out->buffer, create_cell_of_number_to_verify(ntv), id, eh_ultimo);
+	insert_in_fila_buffer_IO(buffer_out->buffer, create_cell_of_number_to_verify(ntv), id, eh_ultimo);
 }
 
 pkg_number_to_veriry_pt get_from_buffer_IO(buffer_IO_pt buffer_in, id_t id)
@@ -522,49 +469,7 @@ void* thread_geradora(void* args)
 		fila_buffer_IO_pt fila_out = buffer_out->buffer;
 		cell_of_number_to_verify_pt cell = create_cell_of_number_to_verify(ntv);
 
-		if(!OUTRA_ABORDAGEM_FILA)
-		{
-			int o;
-			sem_getvalue(fila_out->sem_vazio, &o);
-			if (DEBUG_ESCRITA) printf(ANSI_COLOR_YELLOW "THREAD #%d VAI TENTAR escrver %lld na fila_out(%p)\nvazio = %d\n" ANSI_COLOR_RESET, pkg->id, cell->atual->number, fila_out, o);
-			sem_wait(buffer_out->buffer->sem_vazio);
-			sem_wait(fila_out->sem_mutex);
-			sem_getvalue(fila_out->sem_vazio, &o);
-			if (DEBUG_ESCRITA) printf(ANSI_COLOR_RED "THREAD #%d VAI CONSEGUIR escrver %lld na fila_out(%p)\nvazio = %d\n" ANSI_COLOR_RESET, pkg->id, cell->atual->number, fila_out, o);
-
-
-			if (fila_out->current_size + 2 >= fila_out->max_size) // verifica se a Thread geradora vai encher a fila
-			{
-				sem_post(fila_out->sem_mutex);
-				sem_post(fila_out->sem_vazio);
-				deu_certo = FALSE;
-				continue;
-			}
-
-			if (fila_out->head == NULL) // Fila vazia
-			{
-				fila_out->head = fila_out->last = cell;
-			}
-			else
-			{
-				fila_out->last->proximo = cell;
-				fila_out->last = cell;
-			}
-			fila_out->current_size++;
-
-			sem_post(fila_out->sem_mutex);
-			sem_post(fila_out->sem_cheio);
-
-			sem_getvalue(fila_out->sem_cheio, &o);
-
-			if (DEBUG_ESCRITA) printf(ANSI_COLOR_RED "THREAD #%d CONSEGUIU escrver %lld na fila_out(%p)\ncheio = %d\n" ANSI_COLOR_RESET, pkg->id, cell->atual->number, fila_out, o);
-			
-			deu_certo = TRUE;
-		}
-		else
-		{
-			deu_certo = insert_in_fila_buffer_IO_GERADORA(buffer_out->buffer, cell, pkg->id);
-		}	
+		deu_certo = insert_in_fila_buffer_IO_GERADORA(buffer_out->buffer, cell, pkg->id);
 
 		if (deu_certo) // garante que a Thread Geradora não vai encher o buffer da primeira thread
 		{
@@ -639,7 +544,6 @@ void* thread_sieve_processamento(void* args)
 	buffer_IO_pt buffer_in = pkg->buffer_in;
 	buffer_IO_pt buffer_out = pkg->buffer_out;
 	buffer_de_primos_pt buffer_primos = create_buffer_internal_primos(pkg->size_buffer_internal);
-	cell_of_number_to_verify_pt cabeca;
 	pkg_number_to_veriry_pt ntv;
 	// verifica por meio de um mutex se deve continuar ou não
 	// Vai recever um atributo que indica se precisa continuar ou não
@@ -662,64 +566,9 @@ void* thread_sieve_processamento(void* args)
 		*/
 
 		/// *** GET ***
-
-		fila_buffer_IO_pt fila_in = buffer_in->buffer;
-		if(!OUTRA_ABORDAGEM_FILA)
-		{
-			int o;
-			sem_getvalue(fila_in->sem_cheio, &o);
-			if (DEBUG_LEITURA) printf(ANSI_COLOR_GREEN "THREAD #%d VAI TENTAR ler na fila_in(%p)\ncheio = %d\n" ANSI_COLOR_RESET, pkg->id, fila_in, o);
-			sem_wait(fila_in->sem_cheio);
-			sem_wait(fila_in->sem_mutex);
-			sem_getvalue(fila_in->sem_cheio, &o);
-			if (DEBUG_LEITURA) printf(ANSI_COLOR_BLUE "THREAD #%d VAI CONSEGUIR ler na fila_in(%p)\ncheio = %d\n" ANSI_COLOR_RESET, pkg->id, fila_in, o);
-
-			cabeca = fila_in->head;
-
-			if (fila_in->prevent_deadlock != NULL)
-			{
-				if (fila_in->head == NULL)
-				{
-					fila_in->head = fila_in->last = fila_in->prevent_deadlock;
-				}
-				else
-				{
-					fila_in->last->proximo = fila_in->prevent_deadlock;
-					fila_in->last = fila_in->prevent_deadlock;
-				}
-				fila_in->prevent_deadlock = NULL;
-				sem_post(fila_in->sem_mutex);
-			}
-			else
-			{
-				fila_in->head = fila_in->head->proximo;
-
-				if (fila_in->head == NULL)
-				{
-					fila_in->last = NULL;
-				}
-				fila_in->current_size--;
-
-				sem_post(fila_in->sem_mutex);
-				sem_post(fila_in->sem_vazio);
-			}
-
-			ntv = cabeca->atual;
-			
-			sem_getvalue(fila_in->sem_vazio, &o);
-			if (DEBUG_LEITURA) printf(ANSI_COLOR_BLUE "THREAD #%d CONSEGUIU ler %lld na fila_in(%p)\nvazio = %d\n" ANSI_COLOR_RESET, pkg->id, cabeca->atual->number, fila_in, o);
-		}
-		else
-		{
-			ntv = get_from_buffer_IO(buffer_in, pkg->id);
-		}
-
+		ntv = get_from_buffer_IO(buffer_in, pkg->id);
 		/// *** FIM DO GET ***
-
-		// PROCESSAR()
 				
-		// verificar possibilidade de um loop aqui para que não haja perdas
-		
 		// obtém número primo que tentará dividir o ntv
 
 		primo_t numero_do_vetor_de_primos = get_number_from_buffer_internal_primos(buffer_primos, ntv->round, pkg->id);
@@ -762,49 +611,7 @@ void* thread_sieve_processamento(void* args)
 
 				// *** INSERT ***
 				// printf(ANSI_COLOR_BLUE "THREAD #%d => VAI TENTAR INSERIR no buffer_out(%p)\n" ANSI_COLOR_RESET, pkg->id, buffer_out);
-				fila_buffer_IO_pt fila_out = buffer_out->buffer;
-				cell_of_number_to_verify_pt cell = create_cell_of_number_to_verify(ntv);
-				if(!OUTRA_ABORDAGEM_FILA)
-				{
-					int o;
-					sem_getvalue(fila_out->sem_vazio, &o);
-					if (DEBUG_ESCRITA) printf(ANSI_COLOR_YELLOW "THREAD #%d VAI TENTAR escrver %lld na fila_out(%p)\nvazio = %d\n" ANSI_COLOR_RESET, pkg->id, cell->atual->number, fila_out, o);
-					sem_wait(buffer_out->buffer->sem_vazio);
-					sem_wait(fila_out->sem_mutex);
-					sem_getvalue(fila_out->sem_vazio, &o);
-					if (DEBUG_ESCRITA) printf(ANSI_COLOR_RED "THREAD #%d VAI CONSEGUIR escrver %lld na fila_out(%p)\nvazio = %d\n" ANSI_COLOR_RESET, pkg->id, cell->atual->number, fila_out, o);
-
-
-					if (pkg->eh_ultimo && fila_out->current_size + 1 >= fila_out->max_size)
-					{
-						fila_out->prevent_deadlock = cell;
-						sem_post(fila_out->sem_mutex);
-						//sem_post(fila_out->sem_cheio);
-						continue;
-					}
-
-					if (fila_out->head == NULL)
-					{
-						fila_out->head = fila_out->last = cell;
-					}
-					else
-					{
-						fila_out->last->proximo = cell;
-						fila_out->last = cell;
-					}
-					fila_out->current_size++;
-
-					sem_post(fila_out->sem_mutex);
-					sem_post(fila_out->sem_cheio);
-
-					sem_getvalue(fila_out->sem_cheio, &o);
-
-					if (DEBUG_ESCRITA) printf(ANSI_COLOR_RED "THREAD #%d CONSEGUIU escrver %lld na fila(%p)\ncheio = %d\n" ANSI_COLOR_RESET, pkg->id, cell->atual->number, fila_out, o);
-				}
-				else
-				{
-					insert_in_buffer_IO(buffer_out, ntv, pkg->id, pkg->eh_ultimo);
-				}
+				insert_in_buffer_IO(buffer_out, ntv, pkg->id, pkg->eh_ultimo);
 				// *** FIM DO INSERT ***
 			}
 			else
